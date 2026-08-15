@@ -1,14 +1,22 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { assertReadyLabel, hasReadyLabel } from "../src/github.mjs";
+import {
+  assertReadyLabel,
+  getReadyLabelWarning,
+  hasReadyLabel,
+} from "../src/github.mjs";
 import { parseEnv } from "../src/project.mjs";
 
 test("GitHub label checks are case-insensitive", async () => {
   const exec = async () => ({ stdout: '[{"name":"Ready-For-Agent"}]' });
   assert.equal(await hasReadyLabel({ cwd: "/repo", env: {}, exec }), true);
+  assert.equal(
+    await getReadyLabelWarning({ cwd: "/repo", env: {}, exec }),
+    undefined,
+  );
 });
 
-test("missing label is rejected and never created", async () => {
+test("missing label warns during initialization but is rejected before running", async () => {
   /** @type {[string, string[]][]} */
   const calls = [];
   /** @param {string} file @param {string[]} args */
@@ -19,10 +27,26 @@ test("missing label is rejected and never created", async () => {
 
   await assert.rejects(
     () => assertReadyLabel({ cwd: "/repo", env: {}, exec }),
-    /Create it in the repository before initialization/,
+    /Create it in the repository before running/,
   );
-  assert.equal(calls.length, 1);
+  const warning = await getReadyLabelWarning({ cwd: "/repo", env: {}, exec });
+  assert.ok(warning);
+  assert.match(warning, /Initialization will continue/);
+  assert.equal(calls.length, 2);
   assert.deepEqual(calls[0]?.[1].slice(0, 2), ["label", "list"]);
+});
+
+test("initialization also continues when the label cannot be queried", async () => {
+  const warning = await getReadyLabelWarning({
+    cwd: "/repo",
+    env: {},
+    exec: async () => {
+      throw new Error("no GitHub remote");
+    },
+  });
+  assert.ok(warning);
+  assert.match(warning, /Could not verify/);
+  assert.match(warning, /Initialization will continue/);
 });
 
 test("project env parser handles comments and quoted values", () => {

@@ -9,7 +9,7 @@ GitHub Issue 约束和 Docker 镜像构建收敛到一个 `init` 命令中。
 
 ## 一条命令完成初始化
 
-先确保目标仓库已经关联 GitHub，并且仓库中已有 `ready-for-agent` 标签，然后执行：
+在目标 Git 仓库中直接执行：
 
 ```bash
 cd /path/to/existing-repo
@@ -21,7 +21,7 @@ npx github:liumingjian/sandcastle-for-agent init
 1. 检查当前目录是 Git 仓库，且尚未存在 `.sandcastle`。
 2. 检查 npm、Docker daemon、GitHub CLI 登录、Codex 登录和
    `~/.codex/auth.json`。
-3. 检查 GitHub 仓库中已经存在 `ready-for-agent` 标签，不创建标签。
+3. 检查 `ready-for-agent` 标签；标签不存在或暂时无法查询时给出提示，但继续初始化。
 4. 在没有 `package.json` 时执行 `npm init --yes`。
 5. 精确安装 `@ai-hero/sandcastle@0.12.0` 及模板依赖 `tsx`、`zod`。
 6. 调用上游 `sandcastle init`，固定选择 Codex、Docker、GitHub Issues 和
@@ -41,7 +41,6 @@ npx github:liumingjian/sandcastle-for-agent init
 - 已登录目标 GitHub 账号的 GitHub CLI (`gh`)
 - 已登录并可用的 Codex CLI
 - 宿主机存在 `~/.codex/auth.json`
-- 目标 GitHub 仓库已存在 `ready-for-agent` 标签
 
 `init` 会实际执行检查；也可以提前确认：
 
@@ -52,8 +51,8 @@ codex login status
 test -f ~/.codex/auth.json
 ```
 
-标签由仓库维护者预先管理。本工具只验证，不提供创建标签的设置，也不会调用上游的
-`Sandcastle` 标签创建逻辑。
+标签由仓库维护者管理。本工具不提供创建标签的设置，也不会调用上游的 `Sandcastle`
+标签创建逻辑。初始化时标签不存在不会阻塞安装，但运行 Harness 前必须创建该标签。
 
 ## 配置 GitHub token
 
@@ -78,7 +77,8 @@ GH_TOKEN=github_pat_xxx
 
 ## 运行
 
-给需要实现的 open Issue 添加固定标签：
+运行前，先确认仓库标签列表中存在 `ready-for-agent`，再给需要实现的 open Issue 添加
+该标签：
 
 ```bash
 gh issue edit 123 --add-label ready-for-agent
@@ -96,7 +96,8 @@ npx github:liumingjian/sandcastle-for-agent run
 gh issue list --state open --label ready-for-agent
 ```
 
-标签不存在时，`init` 和 `run` 都会失败，不会退化为处理全部 open issues。
+标签不存在时，`init` 只提示并继续，`run` 会失败。查询始终带固定标签，不会退化为
+处理全部 open issues。
 
 ## 推荐模型配置
 

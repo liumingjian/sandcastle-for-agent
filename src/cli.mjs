@@ -25,7 +25,7 @@ import {
   UPSTREAM_SANDCASTLE_VERSION,
   WORKFLOWS,
 } from "./constants.mjs";
-import { assertReadyLabel } from "./github.mjs";
+import { getReadyLabelWarning } from "./github.mjs";
 import {
   loadProjectEnv,
   projectName,
@@ -266,7 +266,14 @@ async function initialize(values) {
 
   const config = await resolveConfiguration(values, undefined, cwd);
   await preflightInitializer({ cwd });
-  await assertReadyLabel({ cwd, env: await loadProjectEnv(cwd) });
+  const labelWarning = await getReadyLabelWarning({
+    cwd,
+    env: await loadProjectEnv(cwd),
+  });
+  if (labelWarning) {
+    if (isInteractive) clack.log.warn(labelWarning);
+    else console.warn(`Warning: ${labelWarning}`);
+  }
   const upstream = await initializeUpstreamSandcastle({ cwd });
   await scaffoldProject({ cwd, config, allowExisting: true });
 

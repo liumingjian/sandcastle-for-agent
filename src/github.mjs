@@ -36,10 +36,20 @@ export async function hasReadyLabel({ cwd, env, exec = execFileAsync }) {
 }
 
 /** @param {Parameters<typeof hasReadyLabel>[0]} options */
+export async function getReadyLabelWarning(options) {
+  try {
+    if (await hasReadyLabel(options)) return undefined;
+    return `GitHub label '${ISSUE_LABEL}' does not exist. Initialization will continue; create the label and apply it to the open issues you want processed before running.`;
+  } catch {
+    return `Could not verify GitHub label '${ISSUE_LABEL}'. Initialization will continue; make sure the label exists and is applied to the open issues you want processed before running.`;
+  }
+}
+
+/** @param {Parameters<typeof hasReadyLabel>[0]} options */
 export async function assertReadyLabel(options) {
   if (!(await hasReadyLabel(options))) {
     throw new Error(
-      `GitHub label '${ISSUE_LABEL}' does not exist. Create it in the repository before initialization.`,
+      `GitHub label '${ISSUE_LABEL}' does not exist. Create it in the repository before running.`,
     );
   }
 }
