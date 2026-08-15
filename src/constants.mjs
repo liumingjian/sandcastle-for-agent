@@ -1,4 +1,5 @@
 export const PACKAGE_NAME = "sandcastle-for-agent";
+export const UPSTREAM_SANDCASTLE_VERSION = "0.12.0";
 export const CONFIG_VERSION = 1;
 export const ISSUE_LABEL = "ready-for-agent";
 export const CONFIG_DIR = ".sandcastle";

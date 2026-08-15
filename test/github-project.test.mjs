@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { assertReadyLabel, ensureReadyLabel, hasReadyLabel } from "../src/github.mjs";
+import { assertReadyLabel, hasReadyLabel } from "../src/github.mjs";
 import { parseEnv } from "../src/project.mjs";
 
 test("GitHub label checks are case-insensitive", async () => {
@@ -8,7 +8,7 @@ test("GitHub label checks are case-insensitive", async () => {
   assert.equal(await hasReadyLabel({ cwd: "/repo", env: {}, exec }), true);
 });
 
-test("missing label can be rejected or created with the fixed name", async () => {
+test("missing label is rejected and never created", async () => {
   /** @type {[string, string[]][]} */
   const calls = [];
   /** @param {string} file @param {string[]} args */
@@ -19,14 +19,10 @@ test("missing label can be rejected or created with the fixed name", async () =>
 
   await assert.rejects(
     () => assertReadyLabel({ cwd: "/repo", env: {}, exec }),
-    /ready-for-agent/,
+    /Create it in the repository before initialization/,
   );
-  assert.equal(await ensureReadyLabel({ cwd: "/repo", env: {}, exec }), true);
-  assert.deepEqual(calls.at(-1)?.[1].slice(0, 3), [
-    "label",
-    "create",
-    "ready-for-agent",
-  ]);
+  assert.equal(calls.length, 1);
+  assert.deepEqual(calls[0]?.[1].slice(0, 2), ["label", "list"]);
 });
 
 test("project env parser handles comments and quoted values", () => {

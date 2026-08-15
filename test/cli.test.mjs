@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -15,18 +15,21 @@ test("CLI help works without an explicit command", async () => {
   const { stdout } = await exec(process.execPath, [cli, "--help"]);
   assert.match(stdout, /sandcastle-for-agent init/);
   assert.match(stdout, /only processes open issues labeled ready-for-agent/);
+  assert.doesNotMatch(stdout, /--create-label/);
 });
 
-test("non-interactive init scaffolds a Git repository and configure preserves models", async (t) => {
+test("configure overlays an existing Harness and preserves custom models", async (t) => {
   const cwd = await mkdtemp(join(tmpdir(), "sandcastle-for-agent-cli-"));
   t.after(() => rm(cwd, { recursive: true, force: true }));
   await exec("git", ["init", "--quiet"], { cwd });
+  await mkdir(join(cwd, ".sandcastle"));
+  await writeFile(join(cwd, ".sandcastle", "main.mts"), "// upstream\n");
 
   await exec(
     process.execPath,
     [
       cli,
-      "init",
+      "configure",
       "--workflow",
       "parallel-planner-with-review",
       "--preset",
@@ -48,7 +51,6 @@ test("non-interactive init scaffolds a Git repository and configure preserves mo
       "--merger-effort",
       "low",
       "--no-global-agents",
-      "--no-create-label",
       "--no-build",
     ],
     { cwd },
@@ -59,17 +61,17 @@ test("non-interactive init scaffolds a Git repository and configure preserves mo
   assert.equal(initial.stages.planner.model, "planner-local");
   assert.equal(initial.stages.merger.effort, "low");
 
-  await assert.rejects(
-    () => exec(process.execPath, [cli, "init", "--no-build"], { cwd }),
-    /already exists/,
-  );
   await exec(
     process.execPath,
-    [cli, "configure", "--no-create-label", "--no-build"],
+    [cli, "configure", "--no-build"],
     { cwd },
   );
   const configured = JSON.parse(await readFile(configPath, "utf8"));
   assert.deepEqual(configured.stages, initial.stages);
+  assert.equal(
+    await readFile(join(cwd, ".sandcastle", "main.mts"), "utf8"),
+    "// upstream\n",
+  );
 });
 
 test("non-interactive custom preset requires every active stage", async (t) => {

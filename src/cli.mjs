@@ -5,6 +5,12 @@ import { access } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import * as clack from "@clack/prompts";
+import {
+  assertConfigurationTarget,
+  assertInitializationTarget,
+  initializeUpstreamSandcastle,
+  preflightInitializer,
+} from "./bootstrap.mjs";
 import { buildImage } from "./build.mjs";
 import {
   createProjectConfig,
@@ -16,9 +22,10 @@ import {
   EFFORTS,
   MODEL_PRESETS,
   PACKAGE_NAME,
+  UPSTREAM_SANDCASTLE_VERSION,
   WORKFLOWS,
 } from "./constants.mjs";
-import { ensureReadyLabel } from "./github.mjs";
+import { assertReadyLabel } from "./github.mjs";
 import {
   loadProjectEnv,
   projectName,
@@ -48,8 +55,6 @@ const optionDefinitions = {
   "reviewer-effort": { type: "string" },
   "merger-model": { type: "string" },
   "merger-effort": { type: "string" },
-  "create-label": { type: "boolean" },
-  "no-create-label": { type: "boolean" },
   build: { type: "boolean" },
   "no-build": { type: "boolean" },
   help: { type: "boolean", short: "h" },
@@ -67,8 +72,8 @@ Usage:
   sandcastle-for-agent run
 
 Commands:
-  init        Create a guided host-Codex configuration in the current Git repo
-  configure   Replace managed prompts and update an existing configuration
+  init        Check, install and configure the complete Harness in this Git repo
+  configure   Update the host-Codex overlay in an existing Harness
   build       Build the configured Docker image
   run         Validate host Codex, GitHub label and image, then run the workflow
 
@@ -80,9 +85,7 @@ Options:
   --base-url <url>              Container-safe Codex provider URL
   --<stage>-model <model>        Override planner/implementer/reviewer/merger
   --<stage>-effort <effort>      ${EFFORTS.join(" | ")}
-  --create-label                 Create ready-for-agent when missing
-  --no-create-label              Skip label creation
-  --build / --no-build           Build the Docker image after configuration
+  --build / --no-build           Build the Docker image (default for init: build)
   -h, --help                     Show help
   -v, --version                  Show version
 
@@ -248,16 +251,48 @@ async function resolveConfiguration(values, existing, cwd) {
   });
 }
 
-/** @param {"init" | "configure"} command @param {Record<string, unknown>} values */
-async function configure(command, values) {
+/** @param {Record<string, unknown>} values */
+async function initialize(values) {
   const cwd = await resolveGitRoot(process.cwd());
+  await assertInitializationTarget({ cwd });
+
+  if (isInteractive) {
+    clack.intro(`${PACKAGE_NAME}: complete host-Codex Harness`);
+    clack.note(
+      `Upstream: @ai-hero/sandcastle@${UPSTREAM_SANDCASTLE_VERSION}\nAgent: Codex (host login)\nSandbox: Docker\nIssue tracker: GitHub Issues\nRequired label: ready-for-agent`,
+      "Fixed integration",
+    );
+  }
+
+  const config = await resolveConfiguration(values, undefined, cwd);
+  await preflightInitializer({ cwd });
+  await assertReadyLabel({ cwd, env: await loadProjectEnv(cwd) });
+  const upstream = await initializeUpstreamSandcastle({ cwd });
+  await scaffoldProject({ cwd, config, allowExisting: true });
+
+  const buildChoice = booleanChoice(values, "build", "no-build");
+  const shouldBuild = buildChoice ?? true;
+  if (shouldBuild) await buildImage({ cwd, config });
+
+  const result = `Initialized ${config.workflow} with @ai-hero/sandcastle@${upstream.version}`;
+  if (isInteractive) {
+    clack.outro(
+      `${result}. Set GH_TOKEN in .sandcastle/.env, then run npx ${PACKAGE_NAME} run.`,
+    );
+  } else {
+    console.log(`${result} in ${cwd}`);
+  }
+}
+
+/** @param {Record<string, unknown>} values */
+async function configure(values) {
+  const cwd = await resolveGitRoot(process.cwd());
+  await assertConfigurationTarget({ cwd });
   let existing;
-  if (command === "configure") {
-    try {
-      existing = await loadProjectConfig(cwd);
-    } catch {
-      existing = undefined;
-    }
+  try {
+    existing = await loadProjectConfig(cwd);
+  } catch {
+    existing = undefined;
   }
   if (isInteractive) {
     clack.intro(`${PACKAGE_NAME}: host Codex + GitHub Issues`);
@@ -267,17 +302,7 @@ async function configure(command, values) {
     );
   }
   const config = await resolveConfiguration(values, existing, cwd);
-  await scaffoldProject({ cwd, config, allowExisting: command === "configure" });
-
-  const createLabelChoice = booleanChoice(values, "create-label", "no-create-label");
-  const shouldCreateLabel = createLabelChoice ?? false;
-  if (shouldCreateLabel) {
-    const env = await loadProjectEnv(cwd);
-    const created = await ensureReadyLabel({ cwd, env });
-    if (isInteractive) {
-      clack.log.success(created ? "Created ready-for-agent." : "ready-for-agent already exists.");
-    }
-  }
+  await scaffoldProject({ cwd, config, allowExisting: true });
 
   const buildChoice = booleanChoice(values, "build", "no-build");
   const shouldBuild = buildChoice ?? false;
@@ -314,8 +339,10 @@ async function main() {
 
   switch (command) {
     case "init":
+      await initialize(values);
+      break;
     case "configure":
-      await configure(command, values);
+      await configure(values);
       break;
     case "build": {
       const cwd = await resolveGitRoot(process.cwd());

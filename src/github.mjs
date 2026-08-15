@@ -6,7 +6,14 @@ const execFileAsync = promisify(execFile);
 
 /** @param {NodeJS.ProcessEnv} env */
 function githubEnv(env) {
-  return { ...env, GH_TOKEN: env.GH_TOKEN, GITHUB_TOKEN: env.GH_TOKEN };
+  const result = { ...env };
+  if (env.GH_TOKEN) {
+    result.GH_TOKEN = env.GH_TOKEN;
+    result.GITHUB_TOKEN = env.GH_TOKEN;
+  } else {
+    delete result.GH_TOKEN;
+  }
+  return result;
 }
 
 /**
@@ -32,31 +39,7 @@ export async function hasReadyLabel({ cwd, env, exec = execFileAsync }) {
 export async function assertReadyLabel(options) {
   if (!(await hasReadyLabel(options))) {
     throw new Error(
-      `GitHub label '${ISSUE_LABEL}' does not exist. Run 'sandcastle-for-agent configure --create-label'.`,
+      `GitHub label '${ISSUE_LABEL}' does not exist. Create it in the repository before initialization.`,
     );
   }
-}
-
-/**
- * @param {object} options
- * @param {string} options.cwd
- * @param {NodeJS.ProcessEnv} options.env
- * @param {(file: string, args: string[], options: object) => Promise<{stdout?: string}>} [options.exec]
- */
-export async function ensureReadyLabel({ cwd, env, exec = execFileAsync }) {
-  if (await hasReadyLabel({ cwd, env, exec })) return false;
-  await exec(
-    "gh",
-    [
-      "label",
-      "create",
-      ISSUE_LABEL,
-      "--description",
-      "Ready for autonomous agent implementation",
-      "--color",
-      "0E8A16",
-    ],
-    { cwd, env: githubEnv(env) },
-  );
-  return true;
 }
