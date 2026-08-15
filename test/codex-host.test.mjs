@@ -6,6 +6,8 @@ import {
   getCodexMounts,
   preflightHostCodex,
   renderCodexConfig,
+  syncHostCodexConfig,
+  toContainerBaseUrl,
   withoutApiKeyEnv,
 } from "../src/codex-host.mjs";
 import { createProjectConfig } from "../src/config.mjs";
@@ -22,11 +24,56 @@ function config(loadGlobalAgents = false) {
 }
 
 test("generated Codex config delegates model selection to workflow stages", () => {
-  const source = renderCodexConfig("http://host.docker.internal:15721/v1");
+  const source = renderCodexConfig(`
+model_provider = "local"
+
+[model_providers.local]
+name = "Local gateway"
+base_url = "http://127.0.0.1:15721/v1"
+wire_api = "responses"
+requires_openai_auth = true
+http_headers = { Authorization = "do-not-copy" }
+
+[mcp_servers.private]
+url = "https://private.example.com"
+`);
 
   assert.match(source, /requires_openai_auth = true/);
+  assert.match(source, /base_url = "http:\/\/host\.docker\.internal:15721\/v1"/);
   assert.doesNotMatch(source, /^model\s*=/m);
   assert.doesNotMatch(source, /review_model/);
+  assert.doesNotMatch(source, /do-not-copy|mcp_servers|private\.example/);
+});
+
+test("only host-local provider addresses are rewritten for Docker", () => {
+  assert.equal(
+    toContainerBaseUrl("http://localhost:15721/v1"),
+    "http://host.docker.internal:15721/v1",
+  );
+  assert.equal(
+    toContainerBaseUrl("https://api.example.com/v1"),
+    "https://api.example.com/v1",
+  );
+});
+
+test("host Codex config is detected and written to the local Harness", async () => {
+  /** @type {{path?: string, data?: string}} */
+  const written = {};
+  const paths = await syncHostCodexConfig({
+    cwd,
+    home,
+    readHostFile: async (path) => {
+      assert.equal(path, join(home, ".codex", "config.toml"));
+      return 'openai_base_url = "http://[::1]:15721/v1"\n';
+    },
+    writeConfig: async (path, data) => {
+      written.path = path;
+      written.data = data;
+    },
+  });
+  assert.equal(paths.containerPath, join(cwd, ".sandcastle", "codex-config.toml"));
+  assert.equal(written.path, paths.containerPath);
+  assert.match(written.data ?? "", /host\.docker\.internal:15721/);
 });
 
 test("host authentication is mounted read-only and AGENTS.md is optional", () => {

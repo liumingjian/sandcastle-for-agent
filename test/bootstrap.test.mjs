@@ -97,16 +97,22 @@ test("initialization keeps an existing package.json and rejects an existing Harn
 test("initializer preflight checks local auth, npm, Docker, gh and Codex", async () => {
   /** @type {string[]} */
   const calls = [];
+  /** @type {string[]} */
+  const checked = [];
   await preflightInitializer({
     cwd: "/repo",
     home: "/home/test",
     accessFile: async (path) => {
-      assert.equal(path, "/home/test/.codex/auth.json");
+      checked.push(path);
     },
     exec: async (file) => {
       calls.push(file);
       return {};
     },
   });
+  assert.deepEqual(checked, [
+    "/home/test/.codex/config.toml",
+    "/home/test/.codex/auth.json",
+  ]);
   assert.deepEqual(calls, ["npm", "docker", "gh", "codex"]);
 });

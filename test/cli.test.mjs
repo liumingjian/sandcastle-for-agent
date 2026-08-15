@@ -16,6 +16,7 @@ test("CLI help works without an explicit command", async () => {
   assert.match(stdout, /sandcastle-for-agent init/);
   assert.match(stdout, /only processes open issues labeled ready-for-agent/);
   assert.doesNotMatch(stdout, /--create-label/);
+  assert.doesNotMatch(stdout, /--base-url/);
 });
 
 test("configure overlays an existing Harness and preserves custom models", async (t) => {

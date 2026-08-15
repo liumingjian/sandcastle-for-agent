@@ -64,11 +64,16 @@ export async function preflightInitializer({
   accessFile = access,
   exec = execFileAsync,
 }) {
-  const authPath = join(home, ".codex", "auth.json");
-  try {
-    await accessFile(authPath);
-  } catch {
-    throw new Error(`Required host Codex file does not exist: ${authPath}`);
+  const requiredCodexFiles = [
+    join(home, ".codex", "config.toml"),
+    join(home, ".codex", "auth.json"),
+  ];
+  for (const path of requiredCodexFiles) {
+    try {
+      await accessFile(path);
+    } catch {
+      throw new Error(`Required host Codex file does not exist: ${path}`);
+    }
   }
 
   /** @type {[string, string[], string][]} */

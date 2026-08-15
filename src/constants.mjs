@@ -4,7 +4,6 @@ export const CONFIG_VERSION = 1;
 export const ISSUE_LABEL = "ready-for-agent";
 export const CONFIG_DIR = ".sandcastle";
 export const CONFIG_FILE = "for-agent.json";
-export const DEFAULT_BASE_URL = "http://host.docker.internal:15721/v1";
 
 /** @typedef {"planner" | "implementer" | "reviewer" | "merger"} StageName */
 /** @typedef {"low" | "medium" | "high" | "xhigh" | "max"} ReasoningEffort */

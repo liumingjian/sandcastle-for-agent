@@ -18,7 +18,6 @@ import {
   loadProjectConfig,
 } from "./config.mjs";
 import {
-  DEFAULT_BASE_URL,
   EFFORTS,
   MODEL_PRESETS,
   PACKAGE_NAME,
@@ -43,7 +42,6 @@ const optionDefinitions = {
   preset: { type: "string" },
   "global-agents": { type: "boolean" },
   "no-global-agents": { type: "boolean" },
-  "base-url": { type: "string" },
   "image-name": { type: "string" },
   "max-cycles": { type: "string" },
   "implementer-max-iterations": { type: "string" },
@@ -82,7 +80,6 @@ Options:
   --preset <name>               Advanced: ${Object.keys(MODEL_PRESETS).join(" | ")} | custom
   --global-agents               Mount ~/.codex/AGENTS.md
   --no-global-agents            Do not mount the global AGENTS.md
-  --base-url <url>              Container-safe Codex provider URL
   --<stage>-model <model>        Override planner/implementer/reviewer/merger
   --<stage>-effort <effort>      ${EFFORTS.join(" | ")}
   --build / --no-build           Build the Docker image (default for init: build)
@@ -143,7 +140,7 @@ function recommendedConfigSummary() {
     `Implementer: ${stages.implementer.model} / ${stages.implementer.effort}`,
     `Reviewer: ${stages.reviewer.model} / ${stages.reviewer.effort}`,
     `Merger: ${stages.merger.model} / ${stages.merger.effort}`,
-    `Provider URL: ${DEFAULT_BASE_URL}`,
+    "Codex config: detect ~/.codex/config.toml and ~/.codex/auth.json",
     "Global AGENTS.md: load automatically when the host file exists",
   ].join("\n");
 }
@@ -221,11 +218,6 @@ async function resolveConfiguration(values, existing, cwd) {
       ? detectedGlobalAgents
       : existing?.loadGlobalAgents ?? detectedGlobalAgents);
 
-  const baseUrl = String(
-    values["base-url"] ??
-      (useRecommended ? DEFAULT_BASE_URL : existing?.baseUrl ?? DEFAULT_BASE_URL),
-  );
-
   return createProjectConfig({
     workflow,
     projectName: projectName(cwd),
@@ -234,7 +226,6 @@ async function resolveConfiguration(values, existing, cwd) {
     ),
     stages,
     loadGlobalAgents: Boolean(loadGlobalAgents),
-    baseUrl,
     imageName: values["image-name"]
       ? String(values["image-name"])
       : existing?.imageName,

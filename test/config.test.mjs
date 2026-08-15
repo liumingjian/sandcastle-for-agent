@@ -43,7 +43,7 @@ test("custom active-stage settings override a preset", () => {
   });
 });
 
-test("validation rejects invalid active stages and provider URLs", () => {
+test("validation rejects invalid active stages", () => {
   const config = createProjectConfig({
     workflow: "sequential-reviewer",
     projectName: "repo",
@@ -56,10 +56,6 @@ test("validation rejects invalid active stages and provider URLs", () => {
         stages: { ...config.stages, reviewer: { model: "", effort: "high" } },
       }),
     ConfigError,
-  );
-  assert.throws(
-    () => validateProjectConfig({ ...config, baseUrl: "file:///tmp/provider" }),
-    /http or https/,
   );
   assert.equal(normalizeImageName("---"), "sandcastle:repo");
 });

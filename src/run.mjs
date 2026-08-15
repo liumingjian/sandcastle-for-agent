@@ -1,7 +1,11 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { assertImageExists } from "./build.mjs";
-import { preflightHostCodex, createHostCodexRuntime } from "./codex-host.mjs";
+import {
+  createHostCodexRuntime,
+  preflightHostCodex,
+  syncHostCodexConfig,
+} from "./codex-host.mjs";
 import { loadProjectConfig } from "./config.mjs";
 import { CONFIG_DIR } from "./constants.mjs";
 import { assertReadyLabel } from "./github.mjs";
@@ -33,6 +37,7 @@ export async function runConfiguredProject(startDirectory) {
   const cwd = await resolveGitRoot(startDirectory);
   const config = await loadProjectConfig(cwd);
   await assertNoProjectApiKeys(cwd);
+  await syncHostCodexConfig({ cwd });
   const ghToken = await requireGhToken(cwd);
   const env = await loadProjectEnv(cwd);
 

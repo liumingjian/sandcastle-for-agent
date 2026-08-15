@@ -4,7 +4,6 @@ import {
   CONFIG_DIR,
   CONFIG_FILE,
   CONFIG_VERSION,
-  DEFAULT_BASE_URL,
   EFFORTS,
   MODEL_PRESETS,
   WORKFLOWS,
@@ -19,7 +18,6 @@ import {
  * @property {1} version
  * @property {WorkflowName} workflow
  * @property {boolean} loadGlobalAgents
- * @property {string} baseUrl
  * @property {string} imageName
  * @property {number} maxCycles
  * @property {number} implementerMaxIterations
@@ -60,7 +58,6 @@ export function getWorkflow(workflow) {
  * @param {keyof typeof MODEL_PRESETS} [input.preset]
  * @param {Partial<Record<StageName, StageConfig>>} [input.stages]
  * @param {boolean} [input.loadGlobalAgents]
- * @param {string} [input.baseUrl]
  * @param {string} [input.imageName]
  * @param {number} [input.maxCycles]
  * @param {number} [input.implementerMaxIterations]
@@ -83,7 +80,6 @@ export function createProjectConfig(input) {
     version: CONFIG_VERSION,
     workflow: input.workflow,
     loadGlobalAgents: input.loadGlobalAgents ?? false,
-    baseUrl: input.baseUrl ?? DEFAULT_BASE_URL,
     imageName: input.imageName ?? normalizeImageName(input.projectName),
     maxCycles: input.maxCycles ?? 50,
     implementerMaxIterations: input.implementerMaxIterations ?? 100,
@@ -104,15 +100,6 @@ export function validateProjectConfig(value) {
   const workflow = getWorkflow(workflowName);
   if (typeof config.loadGlobalAgents !== "boolean") {
     throw new ConfigError("loadGlobalAgents must be true or false.");
-  }
-  if (typeof config.baseUrl !== "string") {
-    throw new ConfigError("baseUrl must be a URL string.");
-  }
-  try {
-    const url = new URL(config.baseUrl);
-    if (url.protocol !== "http:" && url.protocol !== "https:") throw new Error();
-  } catch {
-    throw new ConfigError("baseUrl must use http or https.");
   }
   if (typeof config.imageName !== "string" || !config.imageName.trim()) {
     throw new ConfigError("imageName must be a non-empty string.");

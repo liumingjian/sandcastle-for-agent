@@ -1,179 +1,131 @@
 # Sandcastle for Agent
 
-Sandcastle for Agent 是 [Sandcastle](https://github.com/mattpocock/sandcastle)
-的宿主 Codex 集成层。它把上游初始化、固定依赖、宿主认证映射、阶段模型配置、
-GitHub Issue 约束和 Docker 镜像构建收敛到一个 `init` 命令中。
+在现有 Git 仓库中初始化一个使用宿主 Codex、Docker 和 GitHub Issues 的
+[Sandcastle](https://github.com/mattpocock/sandcastle) Harness。
 
-用户不需要先克隆两个仓库，也不需要单独运行上游向导。直接在要执行任务的现有 Git
-仓库中调用本工具即可。
+它复用本机已经登录的 Codex 环境，按 Planner、Implementer、Reviewer、Merger
+四个阶段处理带有 `ready-for-agent` 标签的 Issue。
 
-## 一条命令完成初始化
+## What Is Sandcastle for Agent?
 
-在目标 Git 仓库中直接执行：
+上游 Sandcastle 负责 worktree、sandbox、agent provider 和提交收集。本工具在它之上
+提供一条固定的本地 Codex 路径：
+
+1. 安装并固定 `@ai-hero/sandcastle@0.12.0`。
+2. 调用上游初始化 Codex + Docker + GitHub Issues Harness。
+3. 自动读取宿主 `~/.codex/config.toml` 和 `~/.codex/auth.json`。
+4. 应用四阶段模型配置和 `ready-for-agent` Issue 过滤规则。
+5. 构建可直接运行的 Docker 镜像。
+
+不需要克隆本仓库，也不需要先单独执行上游向导。
+
+## Prerequisites
+
+- Node.js 22+
+- Git 和 npm
+- 正在运行的 Docker
+- 已登录的 GitHub CLI (`gh`)
+- 已登录的 Codex CLI
+- `~/.codex/config.toml`
+- `~/.codex/auth.json`
+
+`init` 会检查这些条件。Codex provider、认证文件和本地网关地址不需要在向导中重复输入。
+
+## Quick Start
+
+### 1. 初始化 Harness
+
+进入需要运行 Agent 的现有 Git 仓库：
 
 ```bash
 cd /path/to/existing-repo
 npx github:liumingjian/sandcastle-for-agent init
 ```
 
-交互过程只询问是否应用推荐的四阶段模型配置。确认后，`init` 会依次完成：
+交互过程只询问是否加载推荐的四阶段模型配置。确认后，命令会安装依赖、调用上游
+Sandcastle、生成配置并构建 Docker 镜像。
 
-1. 检查当前目录是 Git 仓库，且尚未存在 `.sandcastle`。
-2. 检查 npm、Docker daemon、GitHub CLI 登录、Codex 登录和
-   `~/.codex/auth.json`。
-3. 检查 `ready-for-agent` 标签；标签不存在或暂时无法查询时给出提示，但继续初始化。
-4. 在没有 `package.json` 时执行 `npm init --yes`。
-5. 精确安装 `@ai-hero/sandcastle@0.12.0` 及模板依赖 `tsx`、`zod`。
-6. 调用上游 `sandcastle init`，固定选择 Codex、Docker、GitHub Issues 和
-   `parallel-planner-with-review`。
-7. 叠加宿主 Codex 认证、全局 `AGENTS.md`、阶段模型和固定 Issue 查询规则。
-8. 构建定制 Docker 镜像。
+成功时会输出：
 
-初始化不会执行 `git clone`，因此可以直接用于已有 Git 项目，也不会与项目自己的
-`.git` 目录冲突。
-
-## 先决条件
-
-- Node.js 22+
-- npm
-- Git
-- 正在运行的 Docker
-- 已登录目标 GitHub 账号的 GitHub CLI (`gh`)
-- 已登录并可用的 Codex CLI
-- 宿主机存在 `~/.codex/auth.json`
-
-`init` 会实际执行检查；也可以提前确认：
-
-```bash
-docker info
-gh auth status
-codex login status
-test -f ~/.codex/auth.json
+```text
+Initialized parallel-planner-with-review with @ai-hero/sandcastle@0.12.0
 ```
 
-标签由仓库维护者管理。本工具不提供创建标签的设置，也不会调用上游的 `Sandcastle`
-标签创建逻辑。初始化时标签不存在不会阻塞安装，但运行 Harness 前必须创建该标签。
+如果仓库还没有 `ready-for-agent` 标签，初始化只会给出提示，不会中断。
 
-## 配置 GitHub token
-
-初始化完成后创建本地环境文件：
+### 2. 配置 GitHub token
 
 ```bash
 cp .sandcastle/.env.example .sandcastle/.env
 ```
 
-编辑 `.sandcastle/.env`：
+在 `.sandcastle/.env` 中写入只授权目标仓库的 fine-grained token：
 
 ```dotenv
 GH_TOKEN=github_pat_xxx
 ```
 
-建议使用只授权目标仓库的 fine-grained personal access token：
+最低权限：
 
 - Issues: Read and write
 - Metadata: Read-only
 
-本工具不会把宿主 GitHub CLI 的凭据写入项目，也不会自动持久化 token。
+### 3. 标记要处理的 Issue
 
-## 运行
-
-运行前，先确认仓库标签列表中存在 `ready-for-agent`，再给需要实现的 open Issue 添加
-该标签：
+运行前，仓库中必须存在 `ready-for-agent` 标签。把它添加到需要实现的 open Issue：
 
 ```bash
 gh issue edit 123 --add-label ready-for-agent
 ```
 
-然后启动 Harness：
+本工具不会创建标签，也不会处理没有该标签的 Issue。
+
+### 4. 运行
 
 ```bash
 npx github:liumingjian/sandcastle-for-agent run
 ```
 
-工作流只查询：
+工作流会读取带标签的 open Issues，完成规划、并行实现、审查和合并。没有符合条件的
+Issue 时会正常结束。
 
-```bash
-gh issue list --state open --label ready-for-agent
+## Host Codex Configuration
+
+Codex 配置来自宿主机，不需要 `baseUrl` 参数：
+
+- `~/.codex/config.toml`：读取当前 `model_provider` 和对应 provider 配置。
+- `~/.codex/auth.json`：只读挂载到容器，不复制到项目。
+- `~/.codex/AGENTS.md`：存在时默认只读挂载。
+
+容器不能通过 `localhost` 访问宿主服务。本工具会自动转换宿主专用地址：
+
+```text
+http://127.0.0.1:15721/v1
+                ↓
+http://host.docker.internal:15721/v1
 ```
 
-标签不存在时，`init` 只提示并继续，`run` 会失败。查询始终带固定标签，不会退化为
-处理全部 open issues。
+`localhost`、`127.0.0.1`、`0.0.0.0` 和本地 IPv6 地址都会转换；外部 HTTPS provider
+保持不变。容器配置会在 `init`、`configure` 和每次 `run` 前刷新。
 
-## 推荐模型配置
+生成的 `.sandcastle/codex-config.toml` 已加入 `.gitignore`。它只包含运行所需的
+provider 字段，不复制宿主 MCP、项目信任或其他机器配置。Codex 官方配置字段见
+[Configuration Reference](https://developers.openai.com/codex/config-reference/)。
 
-`init` 默认建议加载下面这一组配置：
+## Default Workflow
 
-| 阶段 | 模型 | Reasoning effort |
+默认模板是 `parallel-planner-with-review`：
+
+| Stage | Model | Reasoning effort |
 | --- | --- | --- |
 | Planner | `gpt-5.6-sol` | `xhigh` |
 | Implementer | `gpt-5.6-luna` | `max` |
 | Reviewer | `gpt-5.6-sol` | `xhigh` |
 | Merger | `gpt-5.6-luna` | `max` |
 
-`max` 会原样传给容器内 Codex。它取决于宿主 Codex、账号和模型是否支持；不支持时
-Codex 会在运行阶段报错，本工具不会静默降级。
+模型配置保存在 `.sandcastle/for-agent.json`。`max` 会原样传给 Codex，不会自动降级。
 
-配置保存在 `.sandcastle/for-agent.json`，可以提交到项目仓库。高级自动化场景仍可用
-`--<stage>-model` 和 `--<stage>-effort` 覆盖单个阶段。
-
-## 与上游 Sandcastle 的关系
-
-本工具依赖并精确固定 `@ai-hero/sandcastle@0.12.0`。`init` 不是重新实现上游向导，
-而是非交互调用下面这组固定选择：
-
-```bash
-sandcastle init \
-  --agent codex \
-  --sandbox docker \
-  --issue-tracker github-issues \
-  --template parallel-planner-with-review \
-  --create-label false \
-  --install-template-deps false \
-  --build-image false
-```
-
-上游负责 Git worktree、sandbox、agent provider、基础工作流模板和提交收集。本工具在
-上游生成结果之上覆盖以下内容：
-
-- 把宿主机 `~/.codex/auth.json` 只读挂载到 Docker sandbox。
-- 在文件存在时自动加载 `~/.codex/AGENTS.md`。
-- 为 Planner、Implementer、Reviewer、Merger 分别配置模型和 reasoning effort。
-- 将 Issue 入口固定为 open + `ready-for-agent`。
-- 使用本仓库的 Dockerfile 和运行编排。
-
-因此 `.sandcastle/main.mts` 仍由上游生成并保留，但本工具的 `run` 使用包内定制编排。
-这部分覆盖是为了表达上游参数暂时无法表达的宿主认证和阶段模型能力。
-
-## `baseUrl` 是什么
-
-默认值是：
-
-```text
-http://host.docker.internal:15721/v1
-```
-
-它是容器内 Codex 使用的模型 provider API 根地址，不是 Sandcastle 服务地址：
-
-```text
-容器内 Codex -> host.docker.internal:15721 -> 宿主机本地网关 -> 实际模型 provider
-```
-
-- `host.docker.internal` 让 Docker 容器访问宿主机。
-- `15721` 是本仓库默认假定的宿主机 cc-switch 兼容网关端口。
-- `/v1` 是兼容 Responses API 的根路径。
-
-只有宿主机确实在该端口运行兼容网关时才能使用默认值。使用官方 endpoint 或其他本地
-端口时，在初始化或后续配置中覆盖：
-
-```bash
-npx github:liumingjian/sandcastle-for-agent configure \
-  --base-url https://api.openai.com/v1 \
-  --build
-```
-
-容器中的 `127.0.0.1` 和 `localhost` 指向容器自身，不能用它们访问宿主服务。
-
-## 后续配置与命令
+## Commands
 
 ```bash
 sandcastle-for-agent init
@@ -182,51 +134,52 @@ sandcastle-for-agent build
 sandcastle-for-agent run
 ```
 
-- `init`：完成前置检查、上游初始化、定制配置和镜像构建；只用于尚无
-  `.sandcastle` 的仓库。
-- `configure`：更新已有 Harness 的受管文件和模型配置，不重新安装依赖，不创建标签。
-- `build`：重新构建 `.sandcastle/Dockerfile` 对应的镜像。
-- `run`：完成认证、标签和镜像检查后运行四阶段工作流。
+- `init`：检查环境，安装固定依赖，调用上游初始化并构建镜像。
+- `configure`：重新应用宿主 Codex 和阶段配置，不重新安装依赖。
+- `build`：重新构建 Docker 镜像。
+- `run`：检查认证、标签和镜像后运行工作流。
 
-`init` 默认构建镜像。只在 CI 或诊断场景中使用 `--no-build`，之后必须单独执行
-`build`。完整高级参数可通过以下命令查看：
+查看高级模型、工作流和构建参数：
 
 ```bash
 npx github:liumingjian/sandcastle-for-agent --help
 ```
 
-## 生成或覆盖的文件
+## Generated Files
 
 ```text
-package.json
-package-lock.json
 .sandcastle/
 ├── .env.example
 ├── .gitignore
 ├── CODING_STANDARDS.md
 ├── Dockerfile
-├── codex-config.toml
+├── codex-config.toml       # 本地生成，不提交
 ├── for-agent.json
-├── main.mts
+├── main.mts                # 上游 Sandcastle 生成
 └── *-prompt.md
 ```
 
-已有 `package.json` 会保留并增加精确版本的开发依赖。`configure` 会覆盖本工具管理的
-配置和 prompt，但保留上游生成的 `main.mts` 与用户已有的 `.env`。
+`configure` 会更新本工具管理的配置和 prompts，但保留 `.env` 与上游生成的
+`main.mts`。
 
-`.sandcastle/.env` 不允许声明 `OPENAI_API_KEY`、`OPENAI_KEY` 或 `CODEX_API_KEY`；
-本工具只复用宿主 Codex 认证。
+## Issue Selection
 
-## 当前限制
+所有内置工作流使用同一查询：
 
-- 当前只支持 Codex + Docker + GitHub Issues。
-- 初始化依赖 npm；目标仓库使用其他包管理器时会额外生成 `package-lock.json`。
-- 默认 provider URL 是个人 cc-switch 配置，不是 Sandcastle 通用默认值。
-- `max` 超出 Sandcastle 0.12 的公开 TypeScript effort 联合类型；本工具按 Codex
-  运行时能力透传，并有回归测试覆盖最终命令。
-- 仓库当前未声明开源许可证，`package.json` 标记为 `UNLICENSED`。
+```bash
+gh issue list --state open --label ready-for-agent
+```
 
-## 本仓库开发
+`init` 在标签不存在时只提示；`run` 会拒绝启动。查询不会退化为处理全部 open Issues。
+
+## Limitations
+
+- 只支持 Codex + Docker + GitHub Issues。
+- 初始化使用 npm；其他包管理器项目会额外生成 `package-lock.json`。
+- 只复用文件形式的 `~/.codex/auth.json`，不读取系统 keyring 凭据。
+- 仓库仍处于早期阶段，当前没有开源许可证。
+
+## Development
 
 ```bash
 npm install
@@ -234,4 +187,4 @@ npm run check
 npm pack --dry-run
 ```
 
-上游版本升级需要显式修改固定版本，并重新验证初始化输出与覆盖文件。
+升级 Sandcastle 时需要显式修改固定版本，并重新验证上游初始化输出。

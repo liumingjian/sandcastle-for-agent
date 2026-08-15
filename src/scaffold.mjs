@@ -1,8 +1,9 @@
 import { copyFile, mkdir, stat, writeFile } from "node:fs/promises";
+import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { CONFIG_DIR, CONFIG_FILE } from "./constants.mjs";
-import { renderCodexConfig } from "./codex-host.mjs";
+import { syncHostCodexConfig } from "./codex-host.mjs";
 import { saveProjectConfig } from "./config.mjs";
 
 const assetsDir = fileURLToPath(new URL("../assets", import.meta.url));
@@ -42,8 +43,14 @@ async function exists(path) {
  * @param {string} options.cwd
  * @param {import("./config.mjs").ProjectConfig} options.config
  * @param {boolean} [options.allowExisting]
+ * @param {string} [options.home]
  */
-export async function scaffoldProject({ cwd, config, allowExisting = false }) {
+export async function scaffoldProject({
+  cwd,
+  config,
+  allowExisting = false,
+  home = homedir(),
+}) {
   const configDir = join(cwd, CONFIG_DIR);
   if (!allowExisting && (await exists(configDir))) {
     throw new Error(
@@ -73,12 +80,9 @@ export async function scaffoldProject({ cwd, config, allowExisting = false }) {
   );
   await writeFile(
     join(configDir, ".gitignore"),
-    ".env\nlogs/\nworktrees/\npatches/\ntools/\n",
+    ".env\ncodex-config.toml\nlogs/\nworktrees/\npatches/\ntools/\n",
   );
-  await writeFile(
-    join(configDir, "codex-config.toml"),
-    renderCodexConfig(config.baseUrl),
-  );
+  await syncHostCodexConfig({ cwd, home });
   await saveProjectConfig(cwd, config);
 
   return {
