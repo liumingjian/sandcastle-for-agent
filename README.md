@@ -1,126 +1,202 @@
 # Sandcastle for Agent
 
-基于 [mattpocock/sandcastle](https://github.com/mattpocock/sandcastle) 定制的 GitHub Issue 自动处理工具，分别提供 Codex 和 Claude Code 两套运行配置。
+通过宿主机 Codex 登录运行 [Sandcastle](https://github.com/mattpocock/sandcastle)
+GitHub Issue 工作流。它是一个可直接用 `npx` 执行的补充层，不需要把本仓库
+clone 到目标项目，也不要求在目标项目中配置 OpenAI API Key。
 
-两套配置都会复用宿主机上已有的 Agent 授权信息，不需要在项目中保存 Codex 或 Claude Code 的认证凭证。项目只需要配置用于访问 GitHub Issue 的 `GH_TOKEN`。
+## 核心行为
+
+- 固定使用宿主机 `~/.codex/auth.json`。
+- 为容器生成独立的 `.sandcastle/codex-config.toml`。
+- 可选挂载宿主机 `~/.codex/AGENTS.md`。
+- Planner、Implementer、Reviewer、Merger 可分别设置模型和 reasoning effort。
+- 只读取带 `ready-for-agent` 标签的 open GitHub Issues。
+- 不会在标签缺失时降级为处理全部 open issues。
+- 目标仓库不需要安装 `@ai-hero/sandcastle`、Zod 或本包。
 
 ## 前置条件
 
 - Node.js 22+
+- Git
 - Docker
-- npm
-- 已在宿主机完成 Codex 或 Claude Code 的登录与配置
+- GitHub CLI (`gh`)
+- 已登录并可用的 Codex CLI
+- 宿主机存在 `~/.codex/auth.json`
 
-克隆项目：
+先验证本机 Codex：
 
 ```bash
-git clone https://github.com/liumingjian/sandcastle-for-agent.git
-cd sandcastle-for-agent
+codex login status
+test -f ~/.codex/auth.json
 ```
 
-## 配置 GH_TOKEN
+如果 Codex 只把认证保存在系统 keyring 中，本工具当前不会尝试读取 keyring；请让
+Codex 使用文件认证存储，确保 `auth.json` 存在。
 
-建议使用 GitHub 的 [fine-grained personal access token](https://github.com/settings/personal-access-tokens/new)，并遵循最小权限原则。
+## 快速开始
 
-创建 token 时配置：
-
-1. `Resource owner`：选择目标仓库所属的用户或组织。
-2. `Repository access`：只选择需要由 Sandcastle 处理 Issue 的仓库。
-3. `Repository permissions`：
-   - `Issues`：`Read and write`
-   - `Metadata`：`Read-only`
-4. `Expiration`：设置合理的过期时间，不建议创建永久 token。
-
-如果仓库属于组织，token 可能需要组织管理员审批。在审批完成前，它可能只能访问公开资源。
-
-进入准备使用的目录，将示例文件复制为 `.env`：
+进入任意已有 Git 仓库：
 
 ```bash
-cd codex
-# 或：cd claudecode
+cd /path/to/existing-repo
+npx github:liumingjian/sandcastle-for-agent init
+```
 
+发布到 npm 后可使用更短的命令：
+
+```bash
+npx sandcastle-for-agent init
+```
+
+引导会确认以下内容：
+
+1. 工作流。
+2. 阶段模型预设。
+3. 是否加载全局 `~/.codex/AGENTS.md`。
+4. Docker 容器访问的 Codex provider URL。
+5. 是否创建 `ready-for-agent` 标签。
+6. 是否立即构建 Docker 镜像。
+
+配置完成后写入 GitHub token：
+
+```bash
 cp .sandcastle/.env.example .sandcastle/.env
 ```
-
-编辑 `.sandcastle/.env`：
 
 ```dotenv
 GH_TOKEN=github_pat_xxx
 ```
 
-`.sandcastle/.env` 已被 Git 忽略，不要把 token 写入 README、提交记录或其他受版本控制的文件。如果 token 泄露，应立即在 GitHub 中撤销并重新创建。
+建议使用 fine-grained personal access token，并只授予目标仓库：
 
-如果宿主机安装了 GitHub CLI，可以在当前目录验证 token：
+- Issues: Read and write
+- Metadata: Read-only
+
+启动工作流：
 
 ```bash
-set -a
-source .sandcastle/.env
-set +a
-gh auth status
+npx github:liumingjian/sandcastle-for-agent run
 ```
 
-## 使用 Codex
+## Issue 入口规则
 
-Codex 配置会复用宿主机的 `~/.codex/auth.json` 和用户级配置，无需在 `.sandcastle/.env` 中提供 OpenAI API key。
-
-先确认宿主机 Codex 已登录：
+所有内置 prompt 都使用同一个固定查询：
 
 ```bash
-codex login status
+gh issue list --state open --label ready-for-agent
 ```
 
-安装依赖：
+因此只有同时满足以下条件的 issue 才会进入工作流：
 
-```bash
-cd codex
-npm install --save-dev @ai-hero/sandcastle tsx
-npm install zod
+- 状态为 open。
+- 带有 `ready-for-agent` 标签。
+
+其他标签、没有标签以及 closed issues 都不会被实现。标签不存在时，`run` 会直接失败
+并提示执行 `configure --create-label`。
+
+## 工作流
+
+| 名称 | 阶段 |
+| --- | --- |
+| `simple-loop` | Implementer |
+| `sequential-reviewer` | Implementer, Reviewer |
+| `parallel-planner` | Planner, Implementer, Merger |
+| `parallel-planner-with-review` | Planner, Implementer, Reviewer, Merger |
+
+默认选择 `parallel-planner-with-review`。
+
+## 模型预设
+
+`balanced` 使用本仓库原来的模型分工：
+
+| 阶段 | 模型 | Reasoning effort |
+| --- | --- | --- |
+| Planner | `gpt-5.6-sol` | `xhigh` |
+| Implementer | `gpt-5.5` | `high` |
+| Reviewer | `gpt-5.6-sol` | `xhigh` |
+| Merger | `gpt-5.5` | `high` |
+
+`quality` 对所有阶段使用 `gpt-5.6-sol` + `xhigh`。选择 `custom` 时，引导会询问
+当前工作流实际使用的每一个阶段。
+
+模型配置保存在 `.sandcastle/for-agent.json`，可以直接审阅和提交到项目仓库。
+
+## 宿主 Codex 映射
+
+每个 Docker sandbox 都会挂载：
+
+```text
+.sandcastle/codex-config.toml -> ~/.codex/config.toml  (read-only)
+~/.codex/auth.json           -> ~/.codex/auth.json    (read-only)
+~/.codex/AGENTS.md           -> ~/.codex/AGENTS.md    (optional, read-only)
 ```
 
-按照上一节创建 `codex/.sandcastle/.env` 并配置 `GH_TOKEN`，然后构建和运行：
+`.sandcastle/.env` 只允许配置 `GH_TOKEN`。如果其中声明
+`OPENAI_API_KEY`、`OPENAI_KEY` 或 `CODEX_API_KEY`，`run` 会拒绝启动。
 
-```bash
-npx sandcastle docker build-image
-npx tsx .sandcastle/main.mts
+默认 provider URL 是：
+
+```text
+http://host.docker.internal:15721/v1
 ```
 
-Codex 的容器专用模型配置位于 `.sandcastle/codex-config.toml`。其中访问宿主机服务的地址应使用 `host.docker.internal`，不能使用容器自身的 `127.0.0.1`。
+可在初始化时修改，模型与 reasoning effort 不写入 `codex-config.toml`，它们由每个
+工作流阶段显式传给 Codex，避免出现两套模型配置。
 
-## 使用 Claude Code
-
-Claude Code 配置会读取宿主机的 `~/.claude/settings.json`，无需在 `.sandcastle/.env` 中提供 `CLAUDE_CODE_OAUTH_TOKEN` 或 `ANTHROPIC_API_KEY`。
-
-先确认宿主机配置文件存在，并且 Claude Code 可以正常使用：
+## 命令
 
 ```bash
-test -f ~/.claude/settings.json
-claude auth status
+sandcastle-for-agent init
+sandcastle-for-agent configure
+sandcastle-for-agent build
+sandcastle-for-agent run
 ```
 
-安装依赖：
+- `init`：要求目标仓库尚未存在 `.sandcastle`。
+- `configure`：用于已有 Sandcastle 配置；会覆盖本工具管理的 Dockerfile、prompt、
+  `CODING_STANDARDS.md` 和配置文件，但保留原来的 `main.mts` 作为回退入口。
+- `build`：构建配置中指定的 Docker 镜像。
+- `run`：执行认证、GitHub 标签、镜像检查后运行所选工作流。
+
+非交互配置示例：
 
 ```bash
-cd claudecode
+npx github:liumingjian/sandcastle-for-agent init \
+  --workflow parallel-planner-with-review \
+  --preset balanced \
+  --no-global-agents \
+  --create-label \
+  --build
+```
+
+查看所有参数：
+
+```bash
+npx github:liumingjian/sandcastle-for-agent --help
+```
+
+## 生成文件
+
+```text
+.sandcastle/
+├── .env.example
+├── .gitignore
+├── CODING_STANDARDS.md
+├── Dockerfile
+├── codex-config.toml
+├── for-agent.json
+└── *-prompt.md
+```
+
+`.sandcastle/.env`、logs、worktrees、patches 和 tools 默认被忽略。
+
+## 本仓库开发
+
+```bash
 npm install
+npm run check
+npm pack --dry-run
 ```
 
-按照前面的说明创建 `claudecode/.sandcastle/.env` 并配置 `GH_TOKEN`，然后构建和运行：
-
-```bash
-npx sandcastle docker build-image
-npx tsx .sandcastle/main.mts
-```
-
-启动沙箱时，Claude Code 配置中的 `127.0.0.1`、`localhost` 和 `[::1]` 会自动转换为 `host.docker.internal`，以便容器访问宿主机上的代理或 API 服务。
-
-## 运行流程
-
-Codex 和 Claude Code 使用相同的编排流程：
-
-1. Planner 分析尚未关闭的 GitHub Issues，并选择当前未被依赖阻塞的任务。
-2. Implementer 在独立分支和沙箱中实现任务。
-3. Reviewer 检查产生的提交。
-4. Merger 合并完成的分支。
-5. 外层循环继续处理新解除阻塞的 Issue，直到没有可执行任务或达到最大迭代次数。
-
-运行前请根据项目实际情况检查 `.sandcastle/` 下的 prompt、模型名称、最大迭代次数和编码规范。
+包使用原生 ESM JavaScript 和 Node.js 测试运行器；通过 GitHub `npx` 安装时不需要额外
+构建步骤。

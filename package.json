@@ -1,0 +1,44 @@
+{
+  "name": "sandcastle-for-agent",
+  "version": "0.1.0",
+  "description": "Run Sandcastle with a host Codex login and guided GitHub Issue workflows.",
+  "type": "module",
+  "bin": {
+    "sandcastle-for-agent": "./src/cli.mjs"
+  },
+  "files": [
+    "assets",
+    "src",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node --test",
+    "typecheck": "tsc --noEmit",
+    "check": "npm run typecheck && npm test",
+    "prepack": "npm run check"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@ai-hero/sandcastle": "0.12.0",
+    "@clack/prompts": "1.1.0",
+    "@standard-schema/spec": "^1.1.0",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.0"
+  },
+  "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/liumingjian/sandcastle-for-agent.git"
+  },
+  "keywords": [
+    "codex",
+    "sandcastle",
+    "github-issues",
+    "agent"
+  ]
+}
