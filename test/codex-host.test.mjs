@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { join } from "node:path";
 import {
+  createHostCodexRuntime,
   getCodexMounts,
   preflightHostCodex,
   renderCodexConfig,
@@ -78,4 +79,22 @@ test("API key variables are removed without mutating the source environment", ()
 
   assert.deepEqual(clean, { GH_TOKEN: "github" });
   assert.equal(source.OPENAI_API_KEY, "secret");
+});
+
+test("host runtime forwards the recommended Luna max setting to Codex", () => {
+  const runtime = createHostCodexRuntime({
+    cwd,
+    config: createProjectConfig({
+      workflow: "parallel-planner-with-review",
+      projectName: "project",
+    }),
+    ghToken: "github-token",
+  });
+  const command = runtime.agent("implementer").buildPrintCommand({
+    prompt: "work",
+    dangerouslySkipPermissions: true,
+  });
+
+  assert.match(command.command, /-m 'gpt-5\.6-luna'/);
+  assert.match(command.command, /model_reasoning_effort="max"/);
 });

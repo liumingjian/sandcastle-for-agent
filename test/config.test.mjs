@@ -7,7 +7,7 @@ import {
   validateProjectConfig,
 } from "../src/config.mjs";
 
-test("balanced config contains stage-specific model defaults", () => {
+test("recommended config contains stage-specific model defaults", () => {
   const config = createProjectConfig({
     workflow: "parallel-planner-with-review",
     projectName: "My Project",
@@ -19,8 +19,12 @@ test("balanced config contains stage-specific model defaults", () => {
     effort: "xhigh",
   });
   assert.deepEqual(config.stages.implementer, {
-    model: "gpt-5.5",
-    effort: "high",
+    model: "gpt-5.6-luna",
+    effort: "max",
+  });
+  assert.deepEqual(config.stages.merger, {
+    model: "gpt-5.6-luna",
+    effort: "max",
   });
 });
 

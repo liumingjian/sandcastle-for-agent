@@ -115,7 +115,12 @@ export function createHostCodexRuntime({ cwd, config, ghToken }) {
     agent: (stage) => {
       const stageConfig = config.stages[stage];
       if (!stageConfig) throw new Error(`No model configured for stage '${stage}'.`);
-      return codex(stageConfig.model, { effort: stageConfig.effort });
+      // Sandcastle 0.12 narrows this union to xhigh, but its runtime forwards
+      // the value unchanged. Host Codex installations may additionally enable max.
+      const options = /** @type {Parameters<typeof codex>[1]} */ (
+        /** @type {unknown} */ ({ effort: stageConfig.effort })
+      );
+      return codex(stageConfig.model, options);
     },
   };
 }

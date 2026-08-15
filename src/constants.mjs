@@ -6,7 +6,7 @@ export const CONFIG_FILE = "for-agent.json";
 export const DEFAULT_BASE_URL = "http://host.docker.internal:15721/v1";
 
 /** @typedef {"planner" | "implementer" | "reviewer" | "merger"} StageName */
-/** @typedef {"low" | "medium" | "high" | "xhigh"} ReasoningEffort */
+/** @typedef {"low" | "medium" | "high" | "xhigh" | "max"} ReasoningEffort */
 /** @typedef {{model: string, effort: ReasoningEffort}} StageConfig */
 
 /** @type {Record<string, {label: string, hint: string, stages: StageName[]}>} */
@@ -33,14 +33,14 @@ export const WORKFLOWS = {
   },
 };
 
-export const EFFORTS = ["low", "medium", "high", "xhigh"];
+export const EFFORTS = ["low", "medium", "high", "xhigh", "max"];
 
 /** @type {Record<StageName, StageConfig>} */
 const balanced = {
   planner: { model: "gpt-5.6-sol", effort: "xhigh" },
-  implementer: { model: "gpt-5.5", effort: "high" },
+  implementer: { model: "gpt-5.6-luna", effort: "max" },
   reviewer: { model: "gpt-5.6-sol", effort: "xhigh" },
-  merger: { model: "gpt-5.5", effort: "high" },
+  merger: { model: "gpt-5.6-luna", effort: "max" },
 };
 
 /** @type {Record<StageName, StageConfig>} */

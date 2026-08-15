@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 
 import { parseArgs } from "node:util";
+import { access } from "node:fs/promises";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import * as clack from "@clack/prompts";
 import { buildImage } from "./build.mjs";
 import {
@@ -70,8 +73,8 @@ Commands:
   run         Validate host Codex, GitHub label and image, then run the workflow
 
 Options:
-  --workflow <name>             ${Object.keys(WORKFLOWS).join(" | ")}
-  --preset <name>               ${Object.keys(MODEL_PRESETS).join(" | ")} | custom
+  --workflow <name>             Advanced: ${Object.keys(WORKFLOWS).join(" | ")}
+  --preset <name>               Advanced: ${Object.keys(MODEL_PRESETS).join(" | ")} | custom
   --global-agents               Mount ~/.codex/AGENTS.md
   --no-global-agents            Do not mount the global AGENTS.md
   --base-url <url>              Container-safe Codex provider URL
@@ -85,6 +88,9 @@ Options:
 
 The package always uses the host ~/.codex/auth.json. It never configures an
 OpenAI API key and only processes open issues labeled ready-for-agent.
+
+Interactive setup asks one question: whether to apply the recommended
+four-stage host-Codex configuration. Advanced flags remain available for CI.
 `);
 }
 
@@ -117,56 +123,60 @@ function booleanChoice(values, yes, no) {
   return undefined;
 }
 
+async function hostGlobalAgentsExists() {
+  try {
+    await access(join(homedir(), ".codex", "AGENTS.md"));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function recommendedConfigSummary() {
+  const stages = MODEL_PRESETS.balanced;
+  return [
+    "Workflow: parallel-planner-with-review",
+    `Planner: ${stages.planner.model} / ${stages.planner.effort}`,
+    `Implementer: ${stages.implementer.model} / ${stages.implementer.effort}`,
+    `Reviewer: ${stages.reviewer.model} / ${stages.reviewer.effort}`,
+    `Merger: ${stages.merger.model} / ${stages.merger.effort}`,
+    `Provider URL: ${DEFAULT_BASE_URL}`,
+    "Global AGENTS.md: load automatically when the host file exists",
+  ].join("\n");
+}
+
 /**
  * @param {Record<string, unknown>} values
  * @param {import("./config.mjs").ProjectConfig | undefined} existing
  * @param {string} cwd
  */
 async function resolveConfiguration(values, existing, cwd) {
+  let useRecommended = false;
+  if (isInteractive) {
+    clack.note(recommendedConfigSummary(), "Recommended configuration");
+    useRecommended = unwrapPrompt(
+      await clack.confirm({
+        message: "Apply this recommended host-Codex configuration?",
+        initialValue: true,
+      }),
+    );
+    if (!useRecommended && !existing) {
+      clack.cancel("No existing sandcastle-for-agent configuration to preserve.");
+      process.exit(0);
+    }
+  }
+
   const workflow = String(
     values.workflow ??
-      (isInteractive
-        ? unwrapPrompt(
-            await clack.select({
-              message: "Select a workflow",
-              initialValue: existing?.workflow ?? "parallel-planner-with-review",
-              options: Object.entries(WORKFLOWS).map(([value, item]) => ({
-                value,
-                label: item.label,
-                hint: item.hint,
-              })),
-            }),
-          )
+      (useRecommended
+        ? "parallel-planner-with-review"
         : existing?.workflow ?? "parallel-planner-with-review"),
   );
   const workflowInfo = getWorkflow(workflow);
 
   const preset = String(
     values.preset ??
-      (isInteractive
-        ? unwrapPrompt(
-            await clack.select({
-              message: "Select a stage model preset",
-              initialValue: existing ? "existing" : "balanced",
-              options: [
-                ...(existing
-                  ? [
-                      {
-                        value: "existing",
-                        label: "Keep current models",
-                        hint: "Preserve the existing stage configuration",
-                      },
-                    ]
-                  : []),
-                { value: "balanced", label: "Balanced", hint: "Current repository defaults" },
-                { value: "quality", label: "Quality", hint: "GPT-5.6 Sol xhigh for every stage" },
-                { value: "custom", label: "Custom", hint: "Choose every active stage" },
-              ],
-            }),
-          )
-        : existing
-          ? "existing"
-          : "balanced"),
+      (useRecommended ? "balanced" : existing ? "existing" : "balanced"),
   );
   if (preset !== "custom" && preset !== "existing" && !(preset in MODEL_PRESETS)) {
     throw new Error(`Unknown model preset '${preset}'.`);
@@ -184,34 +194,14 @@ async function resolveConfiguration(values, existing, cwd) {
         : MODEL_PRESETS[/** @type {"balanced" | "quality"} */ (preset)];
     if (
       preset === "custom" &&
-      !isInteractive &&
       (modelFlag === undefined || effortFlag === undefined)
     ) {
       throw new Error(
-        `Custom preset requires --${stage}-model and --${stage}-effort in non-interactive mode.`,
+        `Custom preset requires --${stage}-model and --${stage}-effort.`,
       );
     }
-    let model = modelFlag ?? selectedPreset[stage].model;
-    let effort = effortFlag ?? selectedPreset[stage].effort;
-    if (preset === "custom" && isInteractive && modelFlag === undefined) {
-      model = unwrapPrompt(
-        await clack.text({
-          message: `${stage} model`,
-          initialValue: String(model),
-          validate: (value) =>
-            (value ?? "").trim() ? undefined : "Model is required",
-        }),
-      );
-    }
-    if (preset === "custom" && isInteractive && effortFlag === undefined) {
-      effort = unwrapPrompt(
-        await clack.select({
-          message: `${stage} reasoning effort`,
-          initialValue: effort,
-          options: EFFORTS.map((value) => ({ value, label: value })),
-        }),
-      );
-    }
+    const model = modelFlag ?? selectedPreset[stage].model;
+    const effort = effortFlag ?? selectedPreset[stage].effort;
     stages[stage] = {
       model: String(model),
       effort: /** @type {import("./config.mjs").ReasoningEffort} */ (
@@ -221,29 +211,16 @@ async function resolveConfiguration(values, existing, cwd) {
   }
 
   const agentsChoice = booleanChoice(values, "global-agents", "no-global-agents");
+  const detectedGlobalAgents = await hostGlobalAgentsExists();
   const loadGlobalAgents =
     agentsChoice ??
-    (isInteractive
-      ? unwrapPrompt(
-          await clack.confirm({
-            message: "Mount ~/.codex/AGENTS.md into every sandbox?",
-            initialValue: existing?.loadGlobalAgents ?? false,
-          }),
-        )
-      : existing?.loadGlobalAgents ?? false);
+    (useRecommended
+      ? detectedGlobalAgents
+      : existing?.loadGlobalAgents ?? detectedGlobalAgents);
 
   const baseUrl = String(
     values["base-url"] ??
-      (isInteractive
-        ? unwrapPrompt(
-            await clack.text({
-              message: "Codex provider URL visible from Docker",
-              initialValue: existing?.baseUrl ?? DEFAULT_BASE_URL,
-              validate: (value) =>
-                (value ?? "").trim() ? undefined : "URL is required",
-            }),
-          )
-        : existing?.baseUrl ?? DEFAULT_BASE_URL),
+      (useRecommended ? DEFAULT_BASE_URL : existing?.baseUrl ?? DEFAULT_BASE_URL),
   );
 
   return createProjectConfig({
@@ -293,16 +270,7 @@ async function configure(command, values) {
   await scaffoldProject({ cwd, config, allowExisting: command === "configure" });
 
   const createLabelChoice = booleanChoice(values, "create-label", "no-create-label");
-  const shouldCreateLabel =
-    createLabelChoice ??
-    (isInteractive
-      ? unwrapPrompt(
-          await clack.confirm({
-            message: "Create the ready-for-agent GitHub label if it is missing?",
-            initialValue: true,
-          }),
-        )
-      : false);
+  const shouldCreateLabel = createLabelChoice ?? false;
   if (shouldCreateLabel) {
     const env = await loadProjectEnv(cwd);
     const created = await ensureReadyLabel({ cwd, env });
@@ -312,16 +280,7 @@ async function configure(command, values) {
   }
 
   const buildChoice = booleanChoice(values, "build", "no-build");
-  const shouldBuild =
-    buildChoice ??
-    (isInteractive
-      ? unwrapPrompt(
-          await clack.confirm({
-            message: `Build Docker image ${config.imageName} now?`,
-            initialValue: true,
-          }),
-        )
-      : false);
+  const shouldBuild = buildChoice ?? false;
   if (shouldBuild) await buildImage({ cwd, config });
 
   if (isInteractive) {

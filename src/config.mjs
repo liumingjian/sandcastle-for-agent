@@ -12,7 +12,7 @@ import {
 
 /** @typedef {keyof typeof WORKFLOWS} WorkflowName */
 /** @typedef {"planner" | "implementer" | "reviewer" | "merger"} StageName */
-/** @typedef {"low" | "medium" | "high" | "xhigh"} ReasoningEffort */
+/** @typedef {"low" | "medium" | "high" | "xhigh" | "max"} ReasoningEffort */
 /** @typedef {{model: string, effort: ReasoningEffort}} StageConfig */
 /**
  * @typedef {object} ProjectConfig
