@@ -1,6 +1,6 @@
 {
   "name": "sandcastle-for-agent",
-  "version": "0.1.0",
+  "version": "0.12.0",
   "description": "Run Sandcastle with a host Codex login and guided GitHub Issue workflows.",
   "type": "module",
   "bin": {
