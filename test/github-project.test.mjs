@@ -5,7 +5,7 @@ import {
   getReadyLabelWarning,
   hasReadyLabel,
 } from "../src/github.mjs";
-import { parseEnv } from "../src/project.mjs";
+import { assertGitHead, parseEnv } from "../src/project.mjs";
 
 test("GitHub label checks are case-insensitive", async () => {
   const exec = async () => ({ stdout: '[{"name":"Ready-For-Agent"}]' });
@@ -53,5 +53,18 @@ test("project env parser handles comments and quoted values", () => {
   assert.deepEqual(
     parseEnv("# comment\nGH_TOKEN='token'\nEMPTY=\nSPACED = value\n"),
     { GH_TOKEN: "token", EMPTY: "", SPACED: "value" },
+  );
+});
+
+test("unborn Git repositories receive an actionable run error", async () => {
+  await assert.rejects(
+    () =>
+      assertGitHead("/repo", async () => {
+        throw new Error("fatal: ambiguous argument 'HEAD'");
+      }),
+    /HEAD is unborn.*initial commit/,
+  );
+  await assert.doesNotReject(() =>
+    assertGitHead("/repo", async () => ({ stdout: "abc123\n" })),
   );
 });

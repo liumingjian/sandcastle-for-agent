@@ -20,6 +20,23 @@ export async function resolveGitRoot(cwd) {
   }
 }
 
+/**
+ * Sandcastle's worktree and branch strategies require an actual commit to use
+ * as their base. A freshly initialized repository has an unborn HEAD instead.
+ * @param {string} cwd
+ * @param {(file: string, args: string[], options: object) => Promise<{stdout?: string}>} [exec]
+ */
+export async function assertGitHead(cwd, exec = execFileAsync) {
+  try {
+    await exec("git", ["rev-parse", "--verify", "HEAD"], { cwd });
+  } catch (error) {
+    throw new Error(
+      "Git repository has no commits yet (HEAD is unborn). Review the generated files and create an initial commit before running Sandcastle.",
+      { cause: error },
+    );
+  }
+}
+
 /** @param {string} source */
 export function parseEnv(source) {
   /** @type {Record<string, string>} */

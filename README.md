@@ -28,6 +28,7 @@
 - 已登录的 Codex CLI
 - `~/.codex/config.toml`
 - `~/.codex/auth.json`
+- 运行前目标仓库至少有一个 Git commit
 
 `init` 会检查这些条件。Codex provider、认证文件和本地网关地址不需要在向导中重复输入。
 
@@ -53,6 +54,15 @@ Initialized parallel-planner-with-review with @ai-hero/sandcastle@0.12.0
 ```
 
 如果仓库还没有 `ready-for-agent` 标签，初始化只会给出提示，不会中断。
+
+初始化完成后先检查生成的文件并创建一次 commit。Sandcastle 需要已有 commit 才能创建
+worktree 和 agent 分支：
+
+```bash
+git status
+git add .sandcastle
+git commit -m "Initialize Sandcastle Harness"
+```
 
 ### 2. 配置 GitHub token
 

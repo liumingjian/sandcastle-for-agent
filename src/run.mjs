@@ -11,6 +11,7 @@ import { CONFIG_DIR } from "./constants.mjs";
 import { assertReadyLabel } from "./github.mjs";
 import {
   detectProjectSetup,
+  assertGitHead,
   loadProjectEnv,
   requireGhToken,
   resolveGitRoot,
@@ -35,6 +36,7 @@ async function assertNoProjectApiKeys(cwd) {
 /** @param {string} startDirectory */
 export async function runConfiguredProject(startDirectory) {
   const cwd = await resolveGitRoot(startDirectory);
+  await assertGitHead(cwd);
   const config = await loadProjectConfig(cwd);
   await assertNoProjectApiKeys(cwd);
   await syncHostCodexConfig({ cwd });
