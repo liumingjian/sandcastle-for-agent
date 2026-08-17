@@ -55,12 +55,13 @@ Initialized parallel-planner-with-review with @ai-hero/sandcastle@0.12.0
 
 如果仓库还没有 `ready-for-agent` 标签，初始化只会给出提示，不会中断。
 
-初始化完成后先检查生成的文件并创建一次 commit。Sandcastle 需要已有 commit 才能创建
+初始化完成后先检查生成的 Harness 和项目基线，并创建一次 commit。新仓库不能只提交
+`.sandcastle`，项目源文件也必须进入基线 commit；Sandcastle 需要已有 commit 才能创建
 worktree 和 agent 分支：
 
 ```bash
 git status
-git add .sandcastle
+git add <project-files> .sandcastle
 git commit -m "Initialize Sandcastle Harness"
 ```
 
