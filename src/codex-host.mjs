@@ -3,8 +3,6 @@ import { access, readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import { codex } from "@ai-hero/sandcastle";
-import { docker } from "@ai-hero/sandcastle/sandboxes/docker";
 import { parse } from "smol-toml";
 import { CONFIG_DIR } from "./constants.mjs";
 
@@ -160,35 +158,6 @@ export async function syncHostCodexConfig({
  * @param {string} options.cwd
  * @param {import("./config.mjs").ProjectConfig} options.config
  * @param {string} [options.home]
- */
-export function getCodexMounts({ cwd, config, home = homedir() }) {
-  const mounts = [
-    {
-      hostPath: join(cwd, CONFIG_DIR, "codex-config.toml"),
-      sandboxPath: "~/.codex/config.toml",
-      readonly: true,
-    },
-    {
-      hostPath: join(home, ".codex", "auth.json"),
-      sandboxPath: "~/.codex/auth.json",
-      readonly: true,
-    },
-  ];
-  if (config.loadGlobalAgents) {
-    mounts.push({
-      hostPath: join(home, ".codex", "AGENTS.md"),
-      sandboxPath: "~/.codex/AGENTS.md",
-      readonly: true,
-    });
-  }
-  return mounts;
-}
-
-/**
- * @param {object} options
- * @param {string} options.cwd
- * @param {import("./config.mjs").ProjectConfig} options.config
- * @param {string} [options.home]
  * @param {(path: string) => Promise<unknown>} [options.accessFile]
  * @param {(file: string, args: string[], options: object) => Promise<unknown>} [options.exec]
  */
@@ -215,30 +184,4 @@ export async function preflightHostCodex({
     cwd,
     env: withoutApiKeyEnv(process.env),
   });
-}
-
-/**
- * The small interface used by every workflow. Authentication, mounts and stage
- * configuration stay behind this module.
- * @param {object} options
- * @param {string} options.cwd
- * @param {import("./config.mjs").ProjectConfig} options.config
- * @param {string} options.ghToken
- */
-export function createHostCodexRuntime({ cwd, config, ghToken }) {
-  const mounts = getCodexMounts({ cwd, config });
-  return {
-    sandbox: () => docker({ imageName: config.imageName, mounts, env: { GH_TOKEN: ghToken } }),
-    /** @param {import("./config.mjs").StageName} stage */
-    agent: (stage) => {
-      const stageConfig = config.stages[stage];
-      if (!stageConfig) throw new Error(`No model configured for stage '${stage}'.`);
-      // Sandcastle 0.12 narrows this union to xhigh, but its runtime forwards
-      // the value unchanged. Host Codex installations may additionally enable max.
-      const options = /** @type {Parameters<typeof codex>[1]} */ (
-        /** @type {unknown} */ ({ effort: stageConfig.effort })
-      );
-      return codex(stageConfig.model, options);
-    },
-  };
 }

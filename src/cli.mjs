@@ -13,7 +13,8 @@ import {
 } from "./bootstrap.mjs";
 import { buildImage } from "./build.mjs";
 import { ensureHarnessDependencies } from "./harness-deps.mjs";
-import { rewriteMainMts } from "./main-rewrite.mjs";
+import { rewriteMainEntry } from "./main-rewrite.mjs";
+import { ensureRunScript } from "./project-script.mjs";
 import {
   createProjectConfig,
   getWorkflow,
@@ -74,7 +75,7 @@ Usage:
 Commands:
   init        Check, install and configure the complete Harness in this Git repo
   configure   Update the host-Codex overlay in an existing Harness
-  build       Build the configured Docker image
+  build       Regenerate main.ts/main.mts and build the Docker image
   run         Validate host Codex, GitHub label and image, then run the workflow
 
 Options:
@@ -272,8 +273,13 @@ async function initialize(values) {
     workflow: config.workflow,
   });
   await scaffoldProject({ cwd, config, allowExisting: true });
-  await rewriteMainMts({ cwd, workflow: config.workflow });
+  const mainEntry = await rewriteMainEntry({
+    cwd,
+    workflow: config.workflow,
+    refresh: true,
+  });
   await ensureHarnessDependencies({ cwd });
+  await ensureRunScript(cwd, mainEntry.filename);
 
   const buildChoice = booleanChoice(values, "build", "no-build");
   const shouldBuild = buildChoice ?? true;
@@ -308,16 +314,19 @@ async function configure(values) {
   }
   const config = await resolveConfiguration(values, existing, cwd);
   await scaffoldProject({ cwd, config, allowExisting: true });
-  await rewriteMainMts({
-    cwd,
-    workflow: config.workflow,
-    refresh: existing?.workflow !== config.workflow,
-  });
   await ensureHarnessDependencies({ cwd });
 
   const buildChoice = booleanChoice(values, "build", "no-build");
   const shouldBuild = buildChoice ?? false;
-  if (shouldBuild) await buildImage({ cwd, config });
+  if (shouldBuild) {
+    const mainEntry = await rewriteMainEntry({
+      cwd,
+      workflow: config.workflow,
+      refresh: true,
+    });
+    await ensureRunScript(cwd, mainEntry.filename);
+    await buildImage({ cwd, config });
+  }
 
   if (isInteractive) {
     clack.outro(
@@ -357,8 +366,16 @@ async function main() {
       break;
     case "build": {
       const cwd = await resolveGitRoot(process.cwd());
-      await buildImage({ cwd, config: await loadProjectConfig(cwd) });
-      console.log("Docker image built.");
+      const config = await loadProjectConfig(cwd);
+      const mainEntry = await rewriteMainEntry({
+        cwd,
+        workflow: config.workflow,
+        refresh: true,
+      });
+      await ensureHarnessDependencies({ cwd });
+      await ensureRunScript(cwd, mainEntry.filename);
+      await buildImage({ cwd, config });
+      console.log(`Built Docker image and generated .sandcastle/${mainEntry.filename}.`);
       break;
     }
     case "run":

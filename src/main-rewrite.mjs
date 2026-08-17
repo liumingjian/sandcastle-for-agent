@@ -1,4 +1,4 @@
-import { copyFile, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { access, copyFile, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -8,8 +8,10 @@ import { CONFIG_DIR } from "./constants.mjs";
 import { getWorkflow } from "./config.mjs";
 
 const assetsDir = fileURLToPath(new URL("../assets", import.meta.url));
-const MANAGED_MARKER = "// sandcastle-for-agent managed main.mts";
+const MANAGED_MARKER = "// sandcastle-for-agent managed main entry";
 const WORKFLOW_MARKER = "// sandcastle-for-agent workflow: ";
+const ADAPTER_MARKER = "// sandcastle-for-agent inline host adapter: v1";
+const MAIN_FILENAMES = ["main.ts", "main.mts"];
 
 /** @param {string} source */
 function managedWorkflow(source) {
@@ -20,20 +22,21 @@ function managedWorkflow(source) {
 export function adaptUpstreamMain(source, workflow) {
   const stages = getWorkflow(workflow).stages;
   if (source.includes(MANAGED_MARKER)) {
-    if (managedWorkflow(source) === workflow) return source;
-    throw new Error(`Managed ${CONFIG_DIR}/main.mts belongs to another workflow.`);
+    if (
+      source.includes(ADAPTER_MARKER) &&
+      managedWorkflow(source) === workflow
+    ) {
+      return source;
+    }
+    throw new Error(
+      `Managed ${CONFIG_DIR}/main entry is stale. Run 'sandcastle-for-agent build' to regenerate it.`,
+    );
   }
 
-  let content = source
-    .replace(
-      'import { run, codex } from "@ai-hero/sandcastle";\n',
-      'import { run } from "@ai-hero/sandcastle";\n',
-    )
-    .replace(
-      /import \{ docker \} from "@ai-hero\/sandcastle\/sandboxes\/docker";\n/g,
-      "",
-    )
-    .replace(/\bdocker\(\)/g, "runtime.sandbox()");
+  const codexFactory = source.includes("import * as sandcastle")
+    ? "sandcastle.codex"
+    : "codex";
+  let content = source.replace(/\bdocker\(\)/g, "sandbox()");
 
   content = content
     .replace(
@@ -63,7 +66,7 @@ export function adaptUpstreamMain(source, workflow) {
           `Upstream ${CONFIG_DIR}/main.mts has more Codex calls than workflow '${workflow}'.`,
         );
       }
-      return `runtime.agent("${stage}")`;
+      return `agent("${stage}")`;
     },
   );
   if (stageIndex !== stages.length) {
@@ -96,13 +99,74 @@ export function adaptUpstreamMain(source, workflow) {
   lines.splice(
     lastImport + 1,
     0,
-    'import { createHostCodexRuntime } from "./for-agent-runtime.mjs";',
+    'import { loadHostCodexContext } from "./for-agent-runtime.mjs";',
     "",
-    "const { config, runtime, setup } = await createHostCodexRuntime({ cwd: process.cwd() });",
+    "const { config, ghToken, hostFiles, setup } = await loadHostCodexContext({ cwd: process.cwd() });",
+    "",
+    "const mounts = [",
+    "  { hostPath: hostFiles.codexConfig, sandboxPath: \"~/.codex/config.toml\", readonly: true },",
+    "  { hostPath: hostFiles.auth, sandboxPath: \"~/.codex/auth.json\", readonly: true },",
+    "  ...(hostFiles.agents ? [{ hostPath: hostFiles.agents, sandboxPath: \"~/.codex/AGENTS.md\", readonly: true }] : []),",
+    "];",
+    "",
+    "const sandbox = () => docker({",
+    "  imageName: config.imageName,",
+    "  mounts,",
+    "  env: { GH_TOKEN: ghToken },",
+    "});",
+    "",
+    "const agent = (stage) => {",
+    "  const stageConfig = config.stages?.[stage];",
+    "  if (!stageConfig) throw new Error(`No model configured for stage '${stage}'.`);",
+    `  return ${codexFactory}(stageConfig.model, { effort: stageConfig.effort });`,
+    "};",
     "",
   );
 
-  return `${MANAGED_MARKER}\n${WORKFLOW_MARKER}${workflow}\n// The orchestration below remains the upstream Sandcastle template.\n${lines.join("\n")}`;
+  return `${MANAGED_MARKER}\n${WORKFLOW_MARKER}${workflow}\n${ADAPTER_MARKER}\n// The orchestration below remains the upstream Sandcastle template.\n${lines.join("\n")}`;
+}
+
+/** @param {string} cwd */
+async function preferredMainFilename(cwd) {
+  try {
+    const packageJson = JSON.parse(await readFile(join(cwd, "package.json"), "utf8"));
+    return packageJson.type === "module" ? "main.ts" : "main.mts";
+  } catch {
+    return "main.mts";
+  }
+}
+
+/** @param {string} cwd */
+export async function resolveMainEntry(cwd) {
+  const preferred = await preferredMainFilename(cwd);
+  const candidates = [preferred, ...MAIN_FILENAMES.filter((name) => name !== preferred)];
+  for (const filename of candidates) {
+    const path = join(cwd, CONFIG_DIR, filename);
+    try {
+      await access(path);
+      return { filename, path };
+    } catch {
+      // Try the other filename used by the upstream scaffold.
+    }
+  }
+  throw new Error(
+    `Missing ${CONFIG_DIR}/main.ts or ${CONFIG_DIR}/main.mts. Run 'sandcastle-for-agent init' first.`,
+  );
+}
+
+/** @param {string} cwd @param {string} workflow */
+export async function assertMainEntryReady(cwd, workflow) {
+  const entry = await resolveMainEntry(cwd);
+  const source = await readFile(entry.path, "utf8");
+  if (
+    !source.includes(ADAPTER_MARKER) ||
+    managedWorkflow(source) !== workflow
+  ) {
+    throw new Error(
+      `The generated ${CONFIG_DIR}/${entry.filename} is not built for workflow '${workflow}'. Run 'sandcastle-for-agent build' first.`,
+    );
+  }
+  return entry;
 }
 
 /**
@@ -150,24 +214,21 @@ async function loadFreshUpstreamMain({ workflow, exec }) {
  * @param {boolean} [options.refresh]
  * @param {(file: string, args: string[], options: {cwd: string}) => Promise<unknown>} [options.exec]
  */
-export async function rewriteMainMts({
+export async function rewriteMainEntry({
   cwd,
   workflow,
   refresh = false,
   exec = runStreamingCommand,
 }) {
   const configDir = join(cwd, CONFIG_DIR);
-  const mainPath = join(configDir, "main.mts");
-  const current = await readFile(mainPath, "utf8");
+  const mainEntry = await resolveMainEntry(cwd);
+  const current = await readFile(mainEntry.path, "utf8");
   const source =
-    refresh ||
-    (current.includes(MANAGED_MARKER) && managedWorkflow(current) !== workflow)
-      ? await loadFreshUpstreamMain({ workflow, exec })
-      : current;
-  await writeFile(mainPath, adaptUpstreamMain(source, workflow), "utf8");
+    refresh ? await loadFreshUpstreamMain({ workflow, exec }) : current;
+  await writeFile(mainEntry.path, adaptUpstreamMain(source, workflow), "utf8");
   await copyFile(
     join(assetsDir, "for-agent-runtime.mjs"),
     join(configDir, "for-agent-runtime.mjs"),
   );
-  return mainPath;
+  return mainEntry;
 }

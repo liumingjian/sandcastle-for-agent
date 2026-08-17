@@ -1,8 +1,6 @@
 import { access, readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import * as sandcastle from "@ai-hero/sandcastle";
-import { docker } from "@ai-hero/sandcastle/sandboxes/docker";
 import { parse } from "smol-toml";
 
 const CONFIG_DIR = ".sandcastle";
@@ -170,13 +168,13 @@ async function detectProjectSetup(cwd) {
 }
 
 /**
- * Load the project configuration and create the exact adapter consumed by the
- * upstream-generated main.mts. The orchestration remains in that file.
+ * Load the host context consumed by the generated upstream main entrypoint.
+ * The main entrypoint owns the Sandcastle provider calls and mount list.
  * @param {object} options
  * @param {string} options.cwd
  * @param {string} [options.home]
  */
-export async function createHostCodexRuntime({ cwd, home = homedir() }) {
+export async function loadHostCodexContext({ cwd, home = homedir() }) {
   const configPath = join(cwd, CONFIG_DIR, CONFIG_FILE);
   const config = JSON.parse(await readFile(configPath, "utf8"));
   const env = {
@@ -201,39 +199,19 @@ export async function createHostCodexRuntime({ cwd, home = homedir() }) {
   await access(hostAuthPath);
   await writeFile(containerConfigPath, renderCodexConfig(hostConfig));
 
-  const mounts = [
-    {
-      hostPath: containerConfigPath,
-      sandboxPath: "~/.codex/config.toml",
-      readonly: true,
-    },
-    {
-      hostPath: hostAuthPath,
-      sandboxPath: "~/.codex/auth.json",
-      readonly: true,
-    },
-  ];
-  if (config.loadGlobalAgents) {
-    const agentsPath = join(home, ".codex", "AGENTS.md");
-    await access(agentsPath);
-    mounts.push({
-      hostPath: agentsPath,
-      sandboxPath: "~/.codex/AGENTS.md",
-      readonly: true,
-    });
-  }
+  const agentsPath = config.loadGlobalAgents
+    ? join(home, ".codex", "AGENTS.md")
+    : undefined;
+  if (agentsPath) await access(agentsPath);
 
   return {
     config,
-    setup: await detectProjectSetup(cwd),
-    runtime: {
-      sandbox: () => docker({ imageName: config.imageName, mounts, env: { GH_TOKEN: env.GH_TOKEN } }),
-      /** @param {string} stage */
-      agent: (stage) => {
-        const stageConfig = config.stages?.[stage];
-        if (!stageConfig) throw new Error(`No model configured for stage '${stage}'.`);
-        return sandcastle.codex(stageConfig.model, { effort: stageConfig.effort });
-      },
+    ghToken: env.GH_TOKEN,
+    hostFiles: {
+      codexConfig: containerConfigPath,
+      auth: hostAuthPath,
+      agents: agentsPath,
     },
+    setup: await detectProjectSetup(cwd),
   };
 }

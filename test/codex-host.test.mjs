@@ -2,8 +2,6 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { join } from "node:path";
 import {
-  createHostCodexRuntime,
-  getCodexMounts,
   preflightHostCodex,
   renderCodexConfig,
   syncHostCodexConfig,
@@ -76,21 +74,6 @@ test("host Codex config is detected and written to the local Harness", async () 
   assert.match(written.data ?? "", /host\.docker\.internal:15721/);
 });
 
-test("host authentication is mounted read-only and AGENTS.md is optional", () => {
-  const basic = getCodexMounts({ cwd, home, config: config() });
-  assert.equal(basic.length, 2);
-  assert.deepEqual(basic[1], {
-    hostPath: join(home, ".codex", "auth.json"),
-    sandboxPath: "~/.codex/auth.json",
-    readonly: true,
-  });
-
-  const withAgents = getCodexMounts({ cwd, home, config: config(true) });
-  assert.equal(withAgents.length, 3);
-  assert.equal(withAgents[2].hostPath, join(home, ".codex", "AGENTS.md"));
-  assert.ok(withAgents.every((mount) => mount.readonly));
-});
-
 test("preflight checks host files and invokes Codex without API key variables", async () => {
   /** @type {string[]} */
   const checked = [];
@@ -126,22 +109,4 @@ test("API key variables are removed without mutating the source environment", ()
 
   assert.deepEqual(clean, { GH_TOKEN: "github" });
   assert.equal(source.OPENAI_API_KEY, "secret");
-});
-
-test("host runtime forwards the recommended Luna max setting to Codex", () => {
-  const runtime = createHostCodexRuntime({
-    cwd,
-    config: createProjectConfig({
-      workflow: "parallel-planner-with-review",
-      projectName: "project",
-    }),
-    ghToken: "github-token",
-  });
-  const command = runtime.agent("implementer").buildPrintCommand({
-    prompt: "work",
-    dangerouslySkipPermissions: true,
-  });
-
-  assert.match(command.command, /-m 'gpt-5\.6-luna'/);
-  assert.match(command.command, /model_reasoning_effort="max"/);
 });

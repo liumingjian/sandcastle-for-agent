@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { access, readFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { basename, join, resolve } from "node:path";
 import { promisify } from "node:util";
 import { CONFIG_DIR } from "./constants.mjs";
@@ -87,39 +87,4 @@ export async function requireGhToken(cwd) {
 /** @param {string} cwd */
 export function projectName(cwd) {
   return basename(resolve(cwd));
-}
-
-/** @param {string} cwd */
-export async function detectProjectSetup(cwd) {
-  /** @param {string} name */
-  const exists = async (name) => {
-    try {
-      await readFile(join(cwd, name));
-      return true;
-    } catch {
-      return false;
-    }
-  };
-  if (!(await exists("package.json"))) return {};
-
-  let command = "npm install";
-  if (await exists("pnpm-lock.yaml")) command = "corepack pnpm install";
-  else if (await exists("yarn.lock")) command = "corepack yarn install";
-  else if (await exists("bun.lock")) command = "";
-
-  const nodeModules = await (async () => {
-    try {
-      await access(join(cwd, "node_modules"));
-      return true;
-    } catch {
-      return false;
-    }
-  })();
-
-  return {
-    hooks: command
-      ? { sandbox: { onSandboxReady: [{ command }] } }
-      : undefined,
-    copyToWorktree: nodeModules ? ["node_modules"] : undefined,
-  };
 }

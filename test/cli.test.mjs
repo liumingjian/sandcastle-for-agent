@@ -108,11 +108,9 @@ test("configure overlays an existing Harness and preserves custom models", async
   );
   const configured = JSON.parse(await readFile(configPath, "utf8"));
   assert.deepEqual(configured.stages, initial.stages);
-  assert.equal(
-    (await readFile(join(cwd, ".sandcastle", "main.mts"), "utf8")).includes(
-      "runtime.agent(\"planner\")",
-    ),
-    true,
+  assert.match(
+    await readFile(join(cwd, ".sandcastle", "main.mts"), "utf8"),
+    /sandcastle\.codex\("planner"\)/,
   );
 });
 

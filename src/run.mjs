@@ -1,4 +1,4 @@
-import { access, readFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { assertImageExists } from "./build.mjs";
 import {
@@ -9,6 +9,8 @@ import { runStreamingCommand } from "./command.mjs";
 import { loadProjectConfig } from "./config.mjs";
 import { CONFIG_DIR } from "./constants.mjs";
 import { assertReadyLabel } from "./github.mjs";
+import { assertMainEntryReady, resolveMainEntry } from "./main-rewrite.mjs";
+import { resolveRunScript } from "./project-script.mjs";
 import {
   assertGitHead,
   loadProjectEnv,
@@ -32,30 +34,23 @@ async function assertNoProjectApiKeys(cwd) {
 }
 
 /**
- * Execute the generated upstream entrypoint with the Harness-local TypeScript
- * runner. Keeping this command separate makes the execution boundary explicit:
- * this package validates the project, then hands control to main.mts.
+ * Execute the package script generated during build. Keeping this command
+ * separate makes the execution boundary explicit: this package validates the
+ * project, then hands control to the upstream main entrypoint.
  * @param {object} options
  * @param {string} options.cwd
  * @param {(file: string, args: string[], options: {cwd: string, env: NodeJS.ProcessEnv}) => Promise<unknown>} [options.exec]
  */
-export async function executeGeneratedMain({
+export async function executeRunScript({
   cwd,
   exec = runStreamingCommand,
 }) {
-  const tsxName = process.platform === "win32" ? "tsx.cmd" : "tsx";
-  const tsxPath = join(cwd, CONFIG_DIR, "node_modules", ".bin", tsxName);
-  try {
-    await access(tsxPath);
-  } catch {
-    throw new Error(
-      `Harness dependencies are missing. Run 'sandcastle-for-agent configure' before running.`,
-    );
-  }
+  const mainEntry = await resolveMainEntry(cwd);
+  const script = await resolveRunScript(cwd, mainEntry.filename);
   return exec(
-    tsxPath,
-    [join(cwd, CONFIG_DIR, "main.mts")],
-    { cwd, env: process.env },
+    script.command,
+    script.args,
+    { cwd: script.cwd, env: process.env },
   );
 }
 
@@ -64,6 +59,7 @@ export async function runConfiguredProject(startDirectory) {
   const cwd = await resolveGitRoot(startDirectory);
   await assertGitHead(cwd);
   const config = await loadProjectConfig(cwd);
+  await assertMainEntryReady(cwd, config.workflow);
   await assertNoProjectApiKeys(cwd);
   await syncHostCodexConfig({ cwd });
   const ghToken = await requireGhToken(cwd);
@@ -75,5 +71,5 @@ export async function runConfiguredProject(startDirectory) {
     assertImageExists({ cwd, config }),
   ]);
 
-  return executeGeneratedMain({ cwd });
+  return executeRunScript({ cwd });
 }
