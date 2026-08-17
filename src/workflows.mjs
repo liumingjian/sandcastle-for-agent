@@ -47,7 +47,7 @@ async function runSimpleLoop({ cwd, config, runtime, setup }) {
 /** @param {WorkflowContext} context */
 async function runSequentialReviewer({ cwd, config, runtime, setup }) {
   for (let iteration = 1; iteration <= config.maxCycles; iteration++) {
-    console.log(`\n=== Cycle ${iteration}/${config.maxCycles} ===\n`);
+    console.log(`\n=== Iteration ${iteration}/${config.maxCycles} ===\n`);
     const branch = `sandcastle/sequential-reviewer/${Date.now()}-${iteration}`;
     const sandbox = await sandcastle.createSandbox({
       cwd,
@@ -83,7 +83,7 @@ async function runSequentialReviewer({ cwd, config, runtime, setup }) {
 async function runParallel(context, withReview) {
   const { cwd, config, runtime, setup } = context;
   for (let iteration = 1; iteration <= config.maxCycles; iteration++) {
-    console.log(`\n=== Cycle ${iteration}/${config.maxCycles} ===\n`);
+    console.log(`\n=== Iteration ${iteration}/${config.maxCycles} ===\n`);
     const plan = await sandcastle.run({
       cwd,
       ...withSetup({ hooks: setup.hooks }),
