@@ -80,11 +80,12 @@ npx github:liumingjian/sandcastle-for-agent build
 然后构建 Docker 镜像。构建完成后，它会在项目 `package.json` 中只增加一个 script：
 
 ```json
-{"scripts":{"sandcastle-for-agent":"npx tsx .sandcastle/main.ts"}}
+{"scripts":{"sandcastle":"npx tsx .sandcastle/main.ts"}}
 ```
 
 如果项目已经使用同名 script 但命令不同，构建会停止并要求先处理脚本命名冲突，不会静默覆盖。
-没有根 `package.json` 时，script 会写入 `.sandcastle/package.json`。
+没有根 `package.json` 时，script 会写入 `.sandcastle/package.json`，执行
+`npm --prefix .sandcastle run sandcastle`。
 
 ### 3. 运行
 
@@ -120,7 +121,7 @@ gh issue edit 123 --add-label ready-for-agent
 #### 执行生成的 script
 
 ```bash
-npm run sandcastle-for-agent
+npm run sandcastle
 ```
 
 这条命令就是上游入口的执行封装。对于有根 `package.json` 的项目，实际执行的是：
@@ -130,10 +131,10 @@ npx tsx .sandcastle/main.ts
 ```
 
 如果上游根据项目类型生成的是 `main.mts`，脚本会自动使用对应扩展名。
-没有根 `package.json` 时，执行 `npm --prefix .sandcastle run sandcastle-for-agent`。
+没有根 `package.json` 时，执行 `npm --prefix .sandcastle run sandcastle`。
 
 `npx github:liumingjian/sandcastle-for-agent run` 仍可作为带环境、标签和镜像预检的可选入口，
-但 Quick Start 的标准流程是 `npm run sandcastle-for-agent`。
+但 Quick Start 的标准流程是 `npm run sandcastle`。
 
 工作流会读取带标签的 open Issues，完成规划、并行实现、审查和合并。没有符合条件的
 Issue 时会正常结束。上游的 worktree、sandbox、提交和合并生命周期没有被本工具重新实现。
@@ -217,7 +218,7 @@ sandcastle-for-agent run
 - `init`：检查环境，调用上游初始化，生成基础配置并安装 Harness 依赖；不改写入口、不生成 script、不构建镜像。
 - `configure`：更新宿主 Codex 和阶段配置，补齐 `.sandcastle/` 内缺失的 Harness 依赖。
 - `build`：按固定的 `@ai-hero/sandcastle@0.12.0` 重新生成 `main.ts/main.mts`、脚本和 Docker 镜像。
-- `run`：可选的预检包装命令；标准流程直接执行 `npm run sandcastle-for-agent`。
+- `run`：可选的预检包装命令；标准流程直接执行 `npm run sandcastle`。
 
 查看高级模型、工作流和构建参数：
 
@@ -251,7 +252,7 @@ merge 逻辑不会由本工具重新实现。
 根项目如果有 `package.json`，会增加：
 
 ```json
-{"scripts":{"sandcastle-for-agent":"npx tsx .sandcastle/main.ts"}}
+{"scripts":{"sandcastle":"npx tsx .sandcastle/main.ts"}}
 ```
 
 实际扩展名由上游模板决定；根项目没有 `package.json` 时，该脚本保存在 Harness 自己的

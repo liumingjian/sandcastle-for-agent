@@ -14,7 +14,7 @@ import {
 import { buildImage } from "./build.mjs";
 import { ensureHarnessDependencies } from "./harness-deps.mjs";
 import { rewriteMainEntry } from "./main-rewrite.mjs";
-import { ensureRunScript } from "./project-script.mjs";
+import { ensureRunScript, RUN_SCRIPT_NAME } from "./project-script.mjs";
 import {
   createProjectConfig,
   getWorkflow,
@@ -290,15 +290,15 @@ async function initialize(values) {
   const result = `Initialized ${config.workflow} with @ai-hero/sandcastle@${upstream.version}`;
   if (isInteractive) {
     const next = shouldBuild
-      ? `npm run ${PACKAGE_NAME}`
-      : `npx ${PACKAGE_NAME} build, then npm run ${PACKAGE_NAME}`;
+      ? `npm run ${RUN_SCRIPT_NAME}`
+      : `npx ${PACKAGE_NAME} build, then npm run ${RUN_SCRIPT_NAME}`;
     clack.outro(
       `${result}. Next run ${next}.`,
     );
   } else {
     console.log(`${result} in ${cwd}`);
     if (!shouldBuild) {
-      console.log(`Next: npx ${PACKAGE_NAME} build && npm run ${PACKAGE_NAME}`);
+      console.log(`Next: npx ${PACKAGE_NAME} build && npm run ${RUN_SCRIPT_NAME}`);
     }
   }
 }
@@ -338,8 +338,8 @@ async function configure(values) {
 
   if (isInteractive) {
     const next = shouldBuild
-      ? `npm run ${PACKAGE_NAME}`
-      : `npx ${PACKAGE_NAME} build, then npm run ${PACKAGE_NAME}`;
+      ? `npm run ${RUN_SCRIPT_NAME}`
+      : `npx ${PACKAGE_NAME} build, then npm run ${RUN_SCRIPT_NAME}`;
     clack.outro(
       `Configured ${config.workflow}. Next run ${next}.`,
     );

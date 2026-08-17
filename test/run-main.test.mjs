@@ -12,7 +12,7 @@ test("run delegates to the generated upstream package script", async (t) => {
   await writeFile(join(cwd, ".sandcastle", "main.mts"), "console.log('upstream');\n");
   await writeFile(
     join(cwd, "package.json"),
-    '{"scripts":{"sandcastle-for-agent":"npx tsx .sandcastle/main.mts"}}\n',
+    '{"scripts":{"sandcastle":"npx tsx .sandcastle/main.mts"}}\n',
   );
 
   /** @type {{file: string, args: string[], cwd: string} | undefined} */
@@ -26,7 +26,7 @@ test("run delegates to the generated upstream package script", async (t) => {
 
   assert.deepEqual(invocation, {
     file: "npm",
-    args: ["run", "sandcastle-for-agent"],
+    args: ["run", "sandcastle"],
     cwd,
   });
 });

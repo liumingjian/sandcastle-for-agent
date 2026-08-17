@@ -2,7 +2,7 @@ import { access, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { CONFIG_DIR } from "./constants.mjs";
 
-export const RUN_SCRIPT_NAME = "sandcastle-for-agent";
+export const RUN_SCRIPT_NAME = "sandcastle";
 
 /** @param {string} path */
 async function readJson(path) {
