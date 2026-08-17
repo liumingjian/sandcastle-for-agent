@@ -4,20 +4,18 @@
 [Sandcastle](https://github.com/mattpocock/sandcastle) Harness。
 
 它复用本机已经登录的 Codex 环境，按 Planner、Implementer、Reviewer、Merger
-四个阶段处理带有 `ready-for-agent` 标签的 Issue。工作流编排仍由上游生成的
-`.sandcastle/main.mts` 负责，本工具只为它接入宿主 Codex 配置。
+四个阶段处理带有 `ready-for-agent` 标签的 Issue。
 
 ## What Is Sandcastle for Agent?
 
-上游 Sandcastle 负责 worktree、sandbox、agent provider、提交收集和工作流循环。本工具在
-它生成的入口上做一层运行时适配：
+上游 Sandcastle 负责 worktree、sandbox、agent provider 和提交收集。本工具在它之上
+提供一条固定的本地 Codex 路径：
 
 1. 通过 `npx` 使用固定版本的 `@ai-hero/sandcastle@0.12.0`。
-2. 调用上游初始化 Codex + Docker + GitHub Issues Harness，保留上游的 `main.mts` 编排。
-3. 将 `main.mts` 中的 Codex 和 Docker provider 调用改接到本地适配器。
-4. 自动读取宿主 `~/.codex/config.toml` 和 `~/.codex/auth.json`。
-5. 应用四阶段模型配置和 `ready-for-agent` Issue 过滤规则。
-6. 构建可直接运行的 Docker 镜像。
+2. 调用上游初始化 Codex + Docker + GitHub Issues Harness。
+3. 自动读取宿主 `~/.codex/config.toml` 和 `~/.codex/auth.json`。
+4. 应用四阶段模型配置和 `ready-for-agent` Issue 过滤规则。
+5. 构建可直接运行的 Docker 镜像。
 
 不需要克隆本仓库，也不需要先单独执行上游向导。
 
@@ -48,10 +46,6 @@ npx github:liumingjian/sandcastle-for-agent init
 交互过程只询问是否加载推荐的四阶段模型配置。确认后，命令会调用上游 Sandcastle、
 生成配置并构建 Docker 镜像。它不会创建或修改目标项目的 `package.json`、
 `package-lock.json`、`pnpm-lock.yaml`、`yarn.lock` 或 `bun.lock`。
-
-初始化会在 `.sandcastle/` 内创建独立的 Harness 依赖包，并执行一次
-`npm install --prefix .sandcastle`。目标项目根目录的 `package.json`、lock 文件和已有
-依赖不会被写入或合并，因此不会和项目自身的包管理器冲突。
 
 成功时会输出：
 
@@ -104,14 +98,8 @@ gh issue edit 123 --add-label ready-for-agent
 npx github:liumingjian/sandcastle-for-agent run
 ```
 
-`run` 会直接执行生成的上游入口：
-
-```bash
-.sandcastle/node_modules/.bin/tsx .sandcastle/main.mts
-```
-
 工作流会读取带标签的 open Issues，完成规划、并行实现、审查和合并。没有符合条件的
-Issue 时会正常结束。上游的 worktree、sandbox、提交和合并生命周期没有被本工具重新实现。
+Issue 时会正常结束。
 
 Sandcastle 的 worktree 是临时目录：当实现分支已经提交且阶段正常结束时，
 `sandbox.close()` 会删除这个干净的 worktree，但会保留 `sandcastle/*` Git 分支；
@@ -135,10 +123,11 @@ npx github:liumingjian/sandcastle-for-agent configure --no-build
 npx github:liumingjian/sandcastle-for-agent build
 ```
 
-构建分为两层：第一层以 `.sandcastle/Dockerfile` 为来源；如果其中包含上游的全局 Codex
-安装步骤，只会在临时副本中延后这一步。第二层使用临时 Dockerfile 补装当前架构的 Codex
-alias，并执行 `codex --version` 验证。临时文件和中间镜像会在构建结束后清理；目标仓库中的
-`.sandcastle/Dockerfile` 不会被本工具覆盖或改写。
+构建分为两层：第一层直接使用上游生成的 `.sandcastle/Dockerfile`，第二层使用构建期间的
+临时 Dockerfile 补装当前架构的 Codex alias，并执行 `codex --version` 验证。临时文件和
+中间镜像会在构建结束后清理；目标仓库中的 `.sandcastle/Dockerfile` 不会被本工具覆盖或
+改写。若检测到旧版本本工具留下的自定义 Dockerfile，只会在临时副本中延后旧的 Codex
+安装步骤，原文件仍保持不变。
 
 ## Host Codex Configuration
 
@@ -163,10 +152,6 @@ http://host.docker.internal:15721/v1
 provider 字段，不复制宿主 MCP、项目信任或其他机器配置。Codex 官方配置字段见
 [Configuration Reference](https://developers.openai.com/codex/config-reference/)。
 
-`.sandcastle/for-agent.json` 由适配器在 `main.mts` 启动时读取。它保存工作流、各阶段
-模型和思考模式、最大迭代次数以及是否挂载全局 `AGENTS.md`。因此修改这些运行时配置不需要
-重写上游编排；切换工作流时，`configure` 才会重新生成对应的上游模板并再次适配。
-
 ## Default Workflow
 
 默认模板是 `parallel-planner-with-review`：
@@ -190,7 +175,7 @@ sandcastle-for-agent run
 ```
 
 - `init`：检查环境，安装固定依赖，调用上游初始化并构建镜像。
-- `configure`：重新应用宿主 Codex 和阶段配置，并补齐 `.sandcastle/` 内缺失的 Harness 依赖。
+- `configure`：重新应用宿主 Codex 和阶段配置，不重新安装依赖。
 - `build`：重新构建 Docker 镜像。
 - `run`：检查认证、标签和镜像后运行工作流。
 
@@ -210,24 +195,15 @@ npx github:liumingjian/sandcastle-for-agent --help
 ├── Dockerfile
 ├── codex-config.toml       # 本地生成，不提交
 ├── for-agent.json
-├── for-agent-runtime.mjs   # 宿主 Codex / Docker 适配器
-├── main.mts                # 上游编排 + 本地 provider 适配
-├── package.json             # Harness 独立依赖
-├── package-lock.json        # Harness 独立 lock 文件
-├── node_modules/            # .gitignore，不提交
+├── main.mts                # 上游 Sandcastle 生成
 └── *-prompt.md
 ```
 
-`main.mts` 是实际执行入口，不是旁路配置文件。它由上游模板生成，再由本工具做有限的
-provider 替换；循环、worktree、sandbox 生命周期和 merge 逻辑仍来自上游。相同工作流下，
-`configure` 会保留已经生成的适配入口；切换工作流时才会从固定的上游版本重新生成。
-
-`Dockerfile` 也保持上游生成版本。`sandcastle-for-agent build` 只在临时构建层中添加宿主
-Codex 兼容逻辑，不覆盖目标仓库中的 `.sandcastle/Dockerfile`。
-
-`.sandcastle/package.json`、`package-lock.json` 和 `node_modules/` 只属于 Harness，和目标
-项目根目录的包管理器文件隔离。这样既能让 `main.mts` 使用上游依赖，也不会把依赖安装到
-用户项目中。
+`configure` 会更新本工具管理的配置和 prompts，但保留 `.env`、上游生成的
+`Dockerfile` 与 `main.mts`。`Dockerfile` 和 `main.mts` 都是上游模板文件；
+`sandcastle-for-agent build` 只在临时构建层中添加宿主 Codex 兼容逻辑，不修改这两个文件。
+`sandcastle-for-agent run` 使用本工具随 `npx` 提供的固定依赖，不要求把 Sandcastle 追加到
+目标项目的依赖中。
 
 ## Issue Selection
 
@@ -242,8 +218,7 @@ gh issue list --state open --label ready-for-agent
 ## Limitations
 
 - 只支持 Codex + Docker + GitHub Issues。
-- 初始化不会修改目标项目根目录的包管理器文件；Harness 依赖只安装在
-  `.sandcastle/` 内，项目依赖仍由项目自身的包管理器管理。
+- 初始化不会修改目标项目的包管理器文件；项目依赖仍由项目自身的包管理器管理。
 - 只复用文件形式的 `~/.codex/auth.json`，不读取系统 keyring 凭据。
 - 仓库仍处于早期阶段，当前没有开源许可证。
 

@@ -12,6 +12,8 @@ import {
   preflightInitializer,
 } from "./bootstrap.mjs";
 import { buildImage } from "./build.mjs";
+import { ensureHarnessDependencies } from "./harness-deps.mjs";
+import { rewriteMainMts } from "./main-rewrite.mjs";
 import {
   createProjectConfig,
   getWorkflow,
@@ -265,8 +267,13 @@ async function initialize(values) {
     if (isInteractive) clack.log.warn(labelWarning);
     else console.warn(`Warning: ${labelWarning}`);
   }
-  const upstream = await initializeUpstreamSandcastle({ cwd });
+  const upstream = await initializeUpstreamSandcastle({
+    cwd,
+    workflow: config.workflow,
+  });
   await scaffoldProject({ cwd, config, allowExisting: true });
+  await rewriteMainMts({ cwd, workflow: config.workflow });
+  await ensureHarnessDependencies({ cwd });
 
   const buildChoice = booleanChoice(values, "build", "no-build");
   const shouldBuild = buildChoice ?? true;
@@ -301,6 +308,12 @@ async function configure(values) {
   }
   const config = await resolveConfiguration(values, existing, cwd);
   await scaffoldProject({ cwd, config, allowExisting: true });
+  await rewriteMainMts({
+    cwd,
+    workflow: config.workflow,
+    refresh: existing?.workflow !== config.workflow,
+  });
+  await ensureHarnessDependencies({ cwd });
 
   const buildChoice = booleanChoice(values, "build", "no-build");
   const shouldBuild = buildChoice ?? false;

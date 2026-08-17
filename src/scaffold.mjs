@@ -79,7 +79,7 @@ export async function scaffoldProject({
   );
   await writeFile(
     join(configDir, ".gitignore"),
-    ".env\ncodex-config.toml\nlogs/\nworktrees/\npatches/\ntools/\n",
+    ".env\nnode_modules/\ncodex-config.toml\nlogs/\nworktrees/\npatches/\ntools/\n",
   );
   await syncHostCodexConfig({ cwd, home });
   await saveProjectConfig(cwd, config);

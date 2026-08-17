@@ -123,12 +123,14 @@ export async function preflightInitializer({
  * are intentionally not touched.
  * @param {object} options
  * @param {string} options.cwd
+ * @param {string} [options.workflow]
  * @param {(path: string) => Promise<unknown>} [options.accessFile]
  * @param {(specifier: string) => string} [options.resolveModule]
  * @param {(file: string, args: string[], options: {cwd: string}) => Promise<unknown>} [options.exec]
  */
 export async function initializeUpstreamSandcastle({
   cwd,
+  workflow = "parallel-planner-with-review",
   accessFile = access,
   resolveModule = defaultResolveModule,
   exec = runStreamingCommand,
@@ -147,7 +149,7 @@ export async function initializeUpstreamSandcastle({
       "--issue-tracker",
       "github-issues",
       "--template",
-      "parallel-planner-with-review",
+      workflow,
       "--create-label",
       "false",
       "--install-template-deps",

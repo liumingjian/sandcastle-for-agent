@@ -9,10 +9,11 @@ import { CONFIG_DIR } from "./constants.mjs";
 const execFileAsync = promisify(execFile);
 
 /** @param {string} source */
-function isLegacyPackageDockerfile(source) {
-  return (
-    source.includes("/home/agent/.codex") &&
-    source.includes("@openai/codex")
+function hasPackageCodexInstall(source) {
+  return source.split(/\r?\n/).some(
+    (line) =>
+      /^\s*RUN\s+npm\s+install\b/.test(line) &&
+      line.includes("@openai/codex"),
   );
 }
 
@@ -21,7 +22,7 @@ function isLegacyPackageDockerfile(source) {
  * The actual install is performed by the temporary derived layer below.
  * @param {string} source
  */
-function deferLegacyCodexInstall(source) {
+function deferPackageCodexInstall(source) {
   const output = [];
   let skipping = false;
   for (const line of source.split(/\r?\n/)) {
@@ -50,16 +51,16 @@ function deferLegacyCodexInstall(source) {
  * @param {string} temporaryBuildDir
  * @returns {Promise<string | undefined>}
  */
-async function prepareLegacyBaseDockerfile(buildContext, temporaryBuildDir) {
+async function prepareBaseDockerfile(buildContext, temporaryBuildDir) {
   let source;
   try {
     source = await readFile(join(buildContext, "Dockerfile"), "utf8");
   } catch {
     return undefined;
   }
-  if (!isLegacyPackageDockerfile(source)) return undefined;
+  if (!hasPackageCodexInstall(source)) return undefined;
   const path = join(temporaryBuildDir, "Base.Dockerfile");
-  await writeFile(path, deferLegacyCodexInstall(source), "utf8");
+  await writeFile(path, deferPackageCodexInstall(source), "utf8");
   return path;
 }
 
@@ -77,7 +78,7 @@ export async function buildImage({ cwd, config, exec = runStreamingCommand }) {
   const temporaryBuildDir = await mkdtemp(join(tmpdir(), "sandcastle-for-agent-build-"));
 
   try {
-    const baseDockerfile = await prepareLegacyBaseDockerfile(
+    const baseDockerfile = await prepareBaseDockerfile(
       buildContext,
       temporaryBuildDir,
     );

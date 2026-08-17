@@ -30,7 +30,40 @@ test("configure overlays an existing Harness and preserves custom models", async
   t.after(() => rm(cwd, { recursive: true, force: true }));
   await exec("git", ["init", "--quiet"], { cwd });
   await mkdir(join(cwd, ".sandcastle"));
-  await writeFile(join(cwd, ".sandcastle", "main.mts"), "// upstream\n");
+  await writeFile(
+    join(cwd, ".sandcastle", "main.mts"),
+    [
+      'import * as sandcastle from "@ai-hero/sandcastle";',
+      'import { docker } from "@ai-hero/sandcastle/sandboxes/docker";',
+      "await sandcastle.run({ sandbox: docker(), agent: sandcastle.codex(\"planner\"), maxIterations: 1 });",
+      "await sandcastle.run({ sandbox: docker(), agent: sandcastle.codex(\"implementer\"), maxIterations: 100 });",
+      "await sandcastle.run({ sandbox: docker(), agent: sandcastle.codex(\"reviewer\"), maxIterations: 1 });",
+      "await sandcastle.run({ sandbox: docker(), agent: sandcastle.codex(\"merger\"), maxIterations: 1 });",
+      "",
+    ].join("\n"),
+  );
+  await mkdir(join(cwd, ".sandcastle", "node_modules", ".bin"), { recursive: true });
+  await writeFile(join(cwd, ".sandcastle", "node_modules", ".bin", "tsx"), "");
+  for (const packageName of [
+    join("@ai-hero", "sandcastle"),
+    "smol-toml",
+    "tsx",
+    "zod",
+  ]) {
+    await mkdir(join(cwd, ".sandcastle", "node_modules", packageName), {
+      recursive: true,
+    });
+    const versions = {
+      [join("@ai-hero", "sandcastle")]: "0.12.0",
+      "smol-toml": "1.8.0",
+      tsx: "4.21.0",
+      zod: "4.4.3",
+    };
+    await writeFile(
+      join(cwd, ".sandcastle", "node_modules", packageName, "package.json"),
+      `${JSON.stringify({ version: versions[packageName] })}\n`,
+    );
+  }
 
   await exec(
     process.execPath,
@@ -76,8 +109,10 @@ test("configure overlays an existing Harness and preserves custom models", async
   const configured = JSON.parse(await readFile(configPath, "utf8"));
   assert.deepEqual(configured.stages, initial.stages);
   assert.equal(
-    await readFile(join(cwd, ".sandcastle", "main.mts"), "utf8"),
-    "// upstream\n",
+    (await readFile(join(cwd, ".sandcastle", "main.mts"), "utf8")).includes(
+      "runtime.agent(\"planner\")",
+    ),
+    true,
   );
 });
 

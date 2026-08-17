@@ -108,3 +108,41 @@ test("legacy package Dockerfile is sanitized only in a temporary build file", as
   assert.equal(invocations[0].args.at(-1), join(cwd, ".sandcastle"));
   assert.equal(invocations[1].args.at(-1), join(cwd, ".sandcastle"));
 });
+
+test("upstream Codex installation is deferred without changing its Dockerfile", async (t) => {
+  const cwd = await mkdtemp(join(tmpdir(), "sandcastle-for-agent-upstream-build-"));
+  t.after(() => rm(cwd, { recursive: true, force: true }));
+  const dockerfile = [
+    "FROM node:22-bookworm",
+    "RUN npm install -g @openai/codex",
+    "USER 1000:1000",
+    "",
+  ].join("\n");
+  await mkdir(join(cwd, ".sandcastle"));
+  await writeFile(join(cwd, ".sandcastle", "Dockerfile"), dockerfile);
+  const config = createProjectConfig({
+    workflow: "simple-loop",
+    projectName: "upstream-fixture",
+  });
+  /** @type {{file: string, args: string[], options: {cwd: string}}[]} */
+  const invocations = [];
+  let baseDockerfileContents = "";
+
+  await buildImage({
+    cwd,
+    config,
+    exec: async (file, args, options) => {
+      invocations.push({ file, args, options });
+      if (args[0] === "build" && args.includes("-f") && invocations.length === 1) {
+        baseDockerfileContents = await readFile(
+          args[args.indexOf("-f") + 1],
+          "utf8",
+        );
+      }
+    },
+  });
+
+  assert.equal(await readFile(join(cwd, ".sandcastle", "Dockerfile"), "utf8"), dockerfile);
+  assert.doesNotMatch(baseDockerfileContents, /npm install -g @openai\/codex/);
+  assert.match(baseDockerfileContents, /temporary layer/);
+});
