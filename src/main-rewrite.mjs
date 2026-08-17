@@ -10,7 +10,7 @@ import { getWorkflow } from "./config.mjs";
 const assetsDir = fileURLToPath(new URL("../assets", import.meta.url));
 const MANAGED_MARKER = "// sandcastle-for-agent managed main entry";
 const WORKFLOW_MARKER = "// sandcastle-for-agent workflow: ";
-const ADAPTER_MARKER = "// sandcastle-for-agent inline host adapter: v1";
+const ADAPTER_MARKER = "// sandcastle-for-agent inline host adapter: v2";
 const MAIN_FILENAMES = ["main.ts", "main.mts"];
 
 /** @param {string} source */
@@ -36,7 +36,7 @@ export function adaptUpstreamMain(source, workflow) {
   const codexFactory = source.includes("import * as sandcastle")
     ? "sandcastle.codex"
     : "codex";
-  let content = source.replace(/\bdocker\(\)/g, "sandbox()");
+  let content = source.replace(/\bdocker\(\)/g, "createDockerSandbox()");
 
   content = content
     .replace(
@@ -109,7 +109,7 @@ export function adaptUpstreamMain(source, workflow) {
     "  ...(hostFiles.agents ? [{ hostPath: hostFiles.agents, sandboxPath: \"~/.codex/AGENTS.md\", readonly: true }] : []),",
     "];",
     "",
-    "const sandbox = () => docker({",
+    "const createDockerSandbox = () => docker({",
     "  imageName: config.imageName,",
     "  mounts,",
     "  env: { GH_TOKEN: ghToken },",

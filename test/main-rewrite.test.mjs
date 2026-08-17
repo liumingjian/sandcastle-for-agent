@@ -27,7 +27,7 @@ test("rewrites the upstream simple loop without replacing its execution flow", (
   assert.match(rewritten, /sandcastle-for-agent managed main entry/);
   assert.match(rewritten, /loadHostCodexContext/);
   assert.match(rewritten, /const mounts = \[/);
-  assert.match(rewritten, /sandbox: sandbox\(\)/);
+  assert.match(rewritten, /sandbox: createDockerSandbox\(\)/);
   assert.match(rewritten, /agent: agent\("implementer"\)/);
   assert.match(rewritten, /docker\(\{[\s\S]*mounts/);
   assert.match(rewritten, /codex\(stageConfig\.model, \{ effort: stageConfig\.effort \}\)/);
@@ -55,7 +55,11 @@ test("rewrites all stages in the upstream parallel planner template", () => {
   assert.match(rewritten, /agent\("reviewer"\)/);
   assert.match(rewritten, /agent\("merger"\)/);
   assert.match(rewritten, /maxIterations: config\.implementerMaxIterations/);
-  assert.equal((rewritten.match(/sandbox\(\)/g) ?? []).length, 4);
+  assert.equal((rewritten.match(/createDockerSandbox\(\)/g) ?? []).length, 4);
+  assert.doesNotMatch(
+    rewritten,
+    /const sandbox = await sandcastle\.createSandbox\([\s\S]*sandbox: sandbox\(\)/,
+  );
 });
 
 test("writes the host adapter beside the generated main.mts", async (t) => {
