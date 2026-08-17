@@ -77,15 +77,8 @@ npx github:liumingjian/sandcastle-for-agent build
 
 `build` 会从固定的 `@ai-hero/sandcastle@0.12.0` 模板重新生成并改写
 `.sandcastle/main.ts` 或 `.sandcastle/main.mts`，写入宿主 Codex 的 mount 和阶段模型，
-然后构建 Docker 镜像。构建完成后，它会在项目 `package.json` 中只增加一个 script：
-
-```json
-{"scripts":{"sandcastle":"npx tsx .sandcastle/main.ts"}}
-```
-
-如果项目已经使用同名 script 但命令不同，构建会停止并要求先处理脚本命名冲突，不会静默覆盖。
-没有根 `package.json` 时，script 会写入 `.sandcastle/package.json`，执行
-`npm --prefix .sandcastle run sandcastle`。
+然后构建 Docker 镜像。它不会创建、修改或格式化目标项目根目录的 `package.json`、
+依赖或 lock 文件。构建完成后会直接打印实际的入口执行命令。
 
 ### 3. 运行
 
@@ -118,23 +111,16 @@ gh issue edit 123 --add-label ready-for-agent
 
 本工具不会创建标签，也不会处理没有该标签的 Issue。
 
-#### 执行生成的 script
+#### 执行生成的入口
 
 ```bash
-npm run sandcastle
+npx tsx .sandcastle/main.mts
 ```
 
-这条命令就是上游入口的执行封装。对于有根 `package.json` 的项目，实际执行的是：
-
-```bash
-npx tsx .sandcastle/main.ts
-```
-
-如果上游根据项目类型生成的是 `main.mts`，脚本会自动使用对应扩展名。
-没有根 `package.json` 时，执行 `npm --prefix .sandcastle run sandcastle`。
+如果上游生成的是 `main.ts`，使用 `npx tsx .sandcastle/main.ts`。
 
 `npx github:liumingjian/sandcastle-for-agent run` 仍可作为带环境、标签和镜像预检的可选入口，
-但 Quick Start 的标准流程是 `npm run sandcastle`。
+它最终也会直接执行同一个 `npx tsx .sandcastle/main.*` 入口。
 
 工作流会读取带标签的 open Issues，完成规划、并行实现、审查和合并。没有符合条件的
 Issue 时会正常结束。上游的 worktree、sandbox、提交和合并生命周期没有被本工具重新实现。
@@ -217,8 +203,8 @@ sandcastle-for-agent run
 
 - `init`：检查环境，调用上游初始化，生成基础配置并安装 Harness 依赖；不改写入口、不生成 script、不构建镜像。
 - `configure`：更新宿主 Codex 和阶段配置，补齐 `.sandcastle/` 内缺失的 Harness 依赖。
-- `build`：按固定的 `@ai-hero/sandcastle@0.12.0` 重新生成 `main.ts/main.mts`、脚本和 Docker 镜像。
-- `run`：可选的预检包装命令；标准流程直接执行 `npm run sandcastle`。
+- `build`：按固定的 `@ai-hero/sandcastle@0.12.0` 重新生成 `main.ts/main.mts` 并构建 Docker 镜像。
+- `run`：可选的预检包装命令；标准流程直接执行 `npx tsx .sandcastle/main.*`。
 
 查看高级模型、工作流和构建参数：
 
@@ -249,14 +235,7 @@ npx github:liumingjian/sandcastle-for-agent --help
 `codex(model, { effort })`，工作流正文仍来自上游。循环、worktree、sandbox 生命周期和
 merge 逻辑不会由本工具重新实现。
 
-根项目如果有 `package.json`，会增加：
-
-```json
-{"scripts":{"sandcastle":"npx tsx .sandcastle/main.ts"}}
-```
-
-实际扩展名由上游模板决定；根项目没有 `package.json` 时，该脚本保存在 Harness 自己的
-`.sandcastle/package.json` 中。
+`build` 不改动根项目的 `package.json`。实际扩展名由上游模板决定，命令会在构建完成时打印。
 
 `Dockerfile` 也保持上游生成版本。`sandcastle-for-agent build` 只在临时构建层中添加宿主
 Codex 兼容逻辑，不覆盖目标仓库中的 `.sandcastle/Dockerfile`。
@@ -278,7 +257,7 @@ gh issue list --state open --label ready-for-agent
 ## Limitations
 
 - 只支持 Codex + Docker + GitHub Issues。
-- 初始化不会修改目标项目根目录的依赖或 lock 文件；只会增加一个执行脚本。Harness 依赖
+- 初始化和构建不会修改目标项目根目录的 `package.json`、依赖或 lock 文件。Harness 依赖
   安装在 `.sandcastle/` 内，项目依赖仍由项目自身的包管理器管理。
 - 只复用文件形式的 `~/.codex/auth.json`，不读取系统 keyring 凭据。
 - 仓库仍处于早期阶段，当前没有开源许可证。

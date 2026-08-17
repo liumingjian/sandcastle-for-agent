@@ -10,7 +10,6 @@ import { loadProjectConfig } from "./config.mjs";
 import { CONFIG_DIR } from "./constants.mjs";
 import { assertReadyLabel } from "./github.mjs";
 import { assertMainEntryReady, resolveMainEntry } from "./main-rewrite.mjs";
-import { resolveRunScript } from "./project-script.mjs";
 import {
   assertGitHead,
   loadProjectEnv,
@@ -34,23 +33,23 @@ async function assertNoProjectApiKeys(cwd) {
 }
 
 /**
- * Execute the package script generated during build. Keeping this command
+ * Execute the generated upstream entrypoint directly. Keeping this command
  * separate makes the execution boundary explicit: this package validates the
  * project, then hands control to the upstream main entrypoint.
  * @param {object} options
  * @param {string} options.cwd
  * @param {(file: string, args: string[], options: {cwd: string, env: NodeJS.ProcessEnv}) => Promise<unknown>} [options.exec]
  */
-export async function executeRunScript({
+export async function executeGeneratedMain({
   cwd,
   exec = runStreamingCommand,
 }) {
   const mainEntry = await resolveMainEntry(cwd);
-  const script = await resolveRunScript(cwd, mainEntry.filename);
+  const npx = process.platform === "win32" ? "npx.cmd" : "npx";
   return exec(
-    script.command,
-    script.args,
-    { cwd: script.cwd, env: process.env },
+    npx,
+    ["tsx", join(CONFIG_DIR, mainEntry.filename)],
+    { cwd, env: process.env },
   );
 }
 
@@ -71,5 +70,5 @@ export async function runConfiguredProject(startDirectory) {
     assertImageExists({ cwd, config }),
   ]);
 
-  return executeRunScript({ cwd });
+  return executeGeneratedMain({ cwd });
 }

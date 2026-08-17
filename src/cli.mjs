@@ -13,8 +13,7 @@ import {
 } from "./bootstrap.mjs";
 import { buildImage } from "./build.mjs";
 import { ensureHarnessDependencies } from "./harness-deps.mjs";
-import { rewriteMainEntry } from "./main-rewrite.mjs";
-import { ensureRunScript, RUN_SCRIPT_NAME } from "./project-script.mjs";
+import { resolveMainEntry, rewriteMainEntry } from "./main-rewrite.mjs";
 import {
   createProjectConfig,
   getWorkflow,
@@ -278,27 +277,27 @@ async function initialize(values) {
   const buildChoice = booleanChoice(values, "build", "no-build");
   const shouldBuild = buildChoice ?? false;
   if (shouldBuild) {
-    const mainEntry = await rewriteMainEntry({
+    await rewriteMainEntry({
       cwd,
       workflow: config.workflow,
       refresh: true,
     });
-    await ensureRunScript(cwd, mainEntry.filename);
     await buildImage({ cwd, config });
   }
 
   const result = `Initialized ${config.workflow} with @ai-hero/sandcastle@${upstream.version}`;
+  const runCommand = `npx tsx .sandcastle/${(await resolveMainEntry(cwd)).filename}`;
   if (isInteractive) {
     const next = shouldBuild
-      ? `npm run ${RUN_SCRIPT_NAME}`
-      : `npx ${PACKAGE_NAME} build, then npm run ${RUN_SCRIPT_NAME}`;
+      ? runCommand
+      : `npx ${PACKAGE_NAME} build, then ${runCommand}`;
     clack.outro(
       `${result}. Next run ${next}.`,
     );
   } else {
     console.log(`${result} in ${cwd}`);
     if (!shouldBuild) {
-      console.log(`Next: npx ${PACKAGE_NAME} build && npm run ${RUN_SCRIPT_NAME}`);
+      console.log(`Next: npx ${PACKAGE_NAME} build && ${runCommand}`);
     }
   }
 }
@@ -327,19 +326,19 @@ async function configure(values) {
   const buildChoice = booleanChoice(values, "build", "no-build");
   const shouldBuild = buildChoice ?? false;
   if (shouldBuild) {
-    const mainEntry = await rewriteMainEntry({
+    await rewriteMainEntry({
       cwd,
       workflow: config.workflow,
       refresh: true,
     });
-    await ensureRunScript(cwd, mainEntry.filename);
     await buildImage({ cwd, config });
   }
 
   if (isInteractive) {
+    const runCommand = `npx tsx .sandcastle/${(await resolveMainEntry(cwd)).filename}`;
     const next = shouldBuild
-      ? `npm run ${RUN_SCRIPT_NAME}`
-      : `npx ${PACKAGE_NAME} build, then npm run ${RUN_SCRIPT_NAME}`;
+      ? runCommand
+      : `npx ${PACKAGE_NAME} build, then ${runCommand}`;
     clack.outro(
       `Configured ${config.workflow}. Next run ${next}.`,
     );
@@ -384,9 +383,9 @@ async function main() {
         refresh: true,
       });
       await ensureHarnessDependencies({ cwd });
-      await ensureRunScript(cwd, mainEntry.filename);
       await buildImage({ cwd, config });
       console.log(`Built Docker image and generated .sandcastle/${mainEntry.filename}.`);
+      console.log(`Run: npx tsx .sandcastle/${mainEntry.filename}`);
       break;
     }
     case "run":
