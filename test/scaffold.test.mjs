@@ -38,6 +38,12 @@ test("scaffold writes package-owned assets and fixed issue filtering", async (t)
   assert.match(ignored, /^codex-config\.toml$/m);
   assert.match(dockerfile, /install -d[^\n]*\/home\/agent\/\.codex/);
   assert.match(dockerfile, /npm install --include=optional -g @openai\/codex/);
+  assert.match(dockerfile, /codex_root=.*npm root -g/);
+  assert.match(dockerfile, /codex_version=.*package\.json/);
+  assert.match(
+    dockerfile,
+    /@openai\/codex-\$\{codex_platform\}@npm:@openai\/codex@\$\{codex_version\}-\$\{codex_platform\}/,
+  );
   assert.match(dockerfile, /&& codex --version/);
   assert.equal(env.trim().split("\n").at(-1), "GH_TOKEN=");
   assert.equal(saved.loadGlobalAgents, true);

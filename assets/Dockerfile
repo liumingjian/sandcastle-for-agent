@@ -21,6 +21,15 @@ RUN groupmod -o -g $AGENT_GID node \
   && install -d -o $AGENT_UID -g $AGENT_GID /home/agent/.codex
 
 RUN npm install --include=optional -g @openai/codex \
+  && codex_root="$(npm root -g)/@openai/codex" \
+  && codex_version="$(node -p 'require(process.argv[1]).version' "$codex_root/package.json")" \
+  && case "$(dpkg --print-architecture)" in \
+       arm64) codex_platform="linux-arm64" ;; \
+       amd64) codex_platform="linux-x64" ;; \
+       *) echo "Unsupported Docker architecture: $(dpkg --print-architecture)" >&2; exit 1 ;; \
+     esac \
+  && npm install --prefix "$codex_root" --no-save --package-lock=false \
+       "@openai/codex-${codex_platform}@npm:@openai/codex@${codex_version}-${codex_platform}" \
   && codex --version
 
 USER ${AGENT_UID}:${AGENT_GID}

@@ -101,6 +101,20 @@ npx github:liumingjian/sandcastle-for-agent run
 工作流会读取带标签的 open Issues，完成规划、并行实现、审查和合并。没有符合条件的
 Issue 时会正常结束。
 
+Sandcastle 的 worktree 是临时目录：当实现分支已经提交且阶段正常结束时，
+`sandbox.close()` 会删除这个干净的 worktree，但会保留 `sandcastle/*` Git 分支；
+parallel 工作流随后由 merger 把这些分支合并到当前分支。若某个 Agent 在提交前失败，
+合并阶段不会运行，请先检查日志和分支：
+
+```bash
+git branch --list 'sandcastle/*'
+git log --all --oneline --decorate --max-count=30
+ls -lt .sandcastle/logs
+```
+
+`sequential-reviewer` 遵循上游模板，只实现并审查分支，不自动把该分支合并到当前分支；
+需要手动检查并合并对应的 `sandcastle/sequential-reviewer/*` 分支。
+
 如果运行时出现 `Missing optional dependency @openai/codex-linux-arm64` 或
 `@openai/codex-linux-x64`，说明当前项目使用的是旧 Docker 镜像。重新构建一次即可：
 
@@ -109,8 +123,9 @@ npx github:liumingjian/sandcastle-for-agent configure --no-build
 npx github:liumingjian/sandcastle-for-agent build
 ```
 
-新镜像会显式安装当前架构的 Codex optional dependency，并在构建阶段执行
-`codex --version` 验证。
+新镜像会先尝试 npm optional dependency，再显式补装当前架构的 Codex alias，并在构建阶段
+执行 `codex --version` 验证。这样即使宿主 npm 配置过滤了 optional dependency，也不会在
+Agent 启动时才失败。
 
 ## Host Codex Configuration
 
