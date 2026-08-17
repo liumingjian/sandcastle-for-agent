@@ -54,6 +54,7 @@ export async function ensureRunScript(cwd, mainFilename) {
         },
       },
       null,
+      2,
     )}\n`,
   );
   return {

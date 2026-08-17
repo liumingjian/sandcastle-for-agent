@@ -68,5 +68,9 @@ test("build keeps the run script isolated when the project has no package", asyn
     await readFile(join(cwd, ".sandcastle", "package.json"), "utf8"),
   );
   assert.equal(packageJson.scripts.sandcastle, "npx tsx main.mts");
+  assert.match(
+    await readFile(join(cwd, ".sandcastle", "package.json"), "utf8"),
+    /\n  "scripts": \{/,
+  );
   assert.deepEqual(await resolveRunScript(cwd, "main.mts"), command);
 });
