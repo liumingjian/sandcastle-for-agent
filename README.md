@@ -123,9 +123,11 @@ npx github:liumingjian/sandcastle-for-agent configure --no-build
 npx github:liumingjian/sandcastle-for-agent build
 ```
 
-新镜像会先尝试 npm optional dependency，再显式补装当前架构的 Codex alias，并在构建阶段
-执行 `codex --version` 验证。这样即使宿主 npm 配置过滤了 optional dependency，也不会在
-Agent 启动时才失败。
+构建分为两层：第一层直接使用上游生成的 `.sandcastle/Dockerfile`，第二层使用构建期间的
+临时 Dockerfile 补装当前架构的 Codex alias，并执行 `codex --version` 验证。临时文件和
+中间镜像会在构建结束后清理；目标仓库中的 `.sandcastle/Dockerfile` 不会被本工具覆盖或
+改写。若检测到旧版本本工具留下的自定义 Dockerfile，只会在临时副本中延后旧的 Codex
+安装步骤，原文件仍保持不变。
 
 ## Host Codex Configuration
 
@@ -197,9 +199,11 @@ npx github:liumingjian/sandcastle-for-agent --help
 └── *-prompt.md
 ```
 
-`configure` 会更新本工具管理的配置和 prompts，但保留 `.env` 与上游生成的
-`main.mts`。`main.mts` 是上游模板文件；`sandcastle-for-agent run` 使用本工具随
-`npx` 提供的固定依赖，不要求把 Sandcastle 追加到目标项目的依赖中。
+`configure` 会更新本工具管理的配置和 prompts，但保留 `.env`、上游生成的
+`Dockerfile` 与 `main.mts`。`Dockerfile` 和 `main.mts` 都是上游模板文件；
+`sandcastle-for-agent build` 只在临时构建层中添加宿主 Codex 兼容逻辑，不修改这两个文件。
+`sandcastle-for-agent run` 使用本工具随 `npx` 提供的固定依赖，不要求把 Sandcastle 追加到
+目标项目的依赖中。
 
 ## Issue Selection
 

@@ -6,7 +6,7 @@ import test from "node:test";
 import { createProjectConfig } from "../src/config.mjs";
 import { scaffoldProject } from "../src/scaffold.mjs";
 
-test("scaffold writes package-owned assets and fixed issue filtering", async (t) => {
+test("scaffold writes overlays, preserves upstream Dockerfile, and fixes issue filtering", async (t) => {
   const cwd = await mkdtemp(join(tmpdir(), "sandcastle-for-agent-scaffold-"));
   t.after(() => rm(cwd, { recursive: true, force: true }));
   const home = join(cwd, "home");
@@ -21,7 +21,9 @@ test("scaffold writes package-owned assets and fixed issue filtering", async (t)
     loadGlobalAgents: true,
   });
 
-  await scaffoldProject({ cwd, config, home });
+  await mkdir(join(cwd, ".sandcastle"), { recursive: true });
+  await writeFile(join(cwd, ".sandcastle", "Dockerfile"), "FROM upstream\n");
+  await scaffoldProject({ cwd, config, allowExisting: true, home });
   const plan = await readFile(join(cwd, ".sandcastle", "plan-prompt.md"), "utf8");
   const codex = await readFile(join(cwd, ".sandcastle", "codex-config.toml"), "utf8");
   const dockerfile = await readFile(join(cwd, ".sandcastle", "Dockerfile"), "utf8");
@@ -36,15 +38,7 @@ test("scaffold writes package-owned assets and fixed issue filtering", async (t)
   assert.doesNotMatch(codex, /^model\s*=/m);
   assert.match(codex, /host\.docker\.internal:15721/);
   assert.match(ignored, /^codex-config\.toml$/m);
-  assert.match(dockerfile, /install -d[^\n]*\/home\/agent\/\.codex/);
-  assert.match(dockerfile, /npm install --include=optional -g @openai\/codex/);
-  assert.match(dockerfile, /codex_root=.*npm root -g/);
-  assert.match(dockerfile, /codex_version=.*package\.json/);
-  assert.match(
-    dockerfile,
-    /@openai\/codex-\$\{codex_platform\}@npm:@openai\/codex@\$\{codex_version\}-\$\{codex_platform\}/,
-  );
-  assert.match(dockerfile, /&& codex --version/);
+  assert.equal(dockerfile, "FROM upstream\n");
   assert.equal(env.trim().split("\n").at(-1), "GH_TOKEN=");
   assert.equal(saved.loadGlobalAgents, true);
   assert.equal("baseUrl" in saved, false);

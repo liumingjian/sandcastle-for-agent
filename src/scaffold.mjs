@@ -59,7 +59,6 @@ export async function scaffoldProject({
   }
   await mkdir(configDir, { recursive: true });
 
-  await copyFile(join(assetsDir, "Dockerfile"), join(configDir, "Dockerfile"));
   await copyFile(
     join(assetsDir, "CODING_STANDARDS.md"),
     join(configDir, "CODING_STANDARDS.md"),
