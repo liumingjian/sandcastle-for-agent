@@ -2,6 +2,7 @@ import { execFile } from "node:child_process";
 import { access } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { withoutApiKeyEnv } from "./codex-host.mjs";
 import { runStreamingCommand } from "./command.mjs";
@@ -11,7 +12,9 @@ import {
 } from "./constants.mjs";
 
 const execFileAsync = promisify(execFile);
-const TEMPLATE_DEPENDENCIES = ["tsx@4.21.0", "zod@4.4.3"];
+const upstreamCliPath = fileURLToPath(
+  new URL("../node_modules/@ai-hero/sandcastle/dist/main.js", import.meta.url),
+);
 
 /** @param {string} path @param {(path: string) => Promise<unknown>} accessFile */
 async function exists(path, accessFile) {
@@ -103,8 +106,9 @@ export async function preflightInitializer({
 }
 
 /**
- * Install the pinned upstream CLI into the target repository and use that local
- * binary to generate the standard Codex/Docker/GitHub Issues harness.
+ * Use the pinned upstream CLI bundled with this package to generate the standard
+ * Codex/Docker/GitHub Issues harness. The target project's package manager files
+ * are intentionally not touched.
  * @param {object} options
  * @param {string} options.cwd
  * @param {(path: string) => Promise<unknown>} [options.accessFile]
@@ -116,30 +120,10 @@ export async function initializeUpstreamSandcastle({
   exec = runStreamingCommand,
 }) {
   await assertInitializationTarget({ cwd, accessFile });
-
-  const createdPackageJson = !(await exists(join(cwd, "package.json"), accessFile));
-  if (createdPackageJson) {
-    await exec("npm", ["init", "--yes"], { cwd });
-  }
-
   await exec(
-    "npm",
+    process.execPath,
     [
-      "install",
-      "--save-dev",
-      "--save-exact",
-      `@ai-hero/sandcastle@${UPSTREAM_SANDCASTLE_VERSION}`,
-      ...TEMPLATE_DEPENDENCIES,
-    ],
-    { cwd },
-  );
-
-  await exec(
-    "npm",
-    [
-      "exec",
-      "--",
-      "sandcastle",
+      upstreamCliPath,
       "init",
       "--agent",
       "codex",
@@ -159,5 +143,5 @@ export async function initializeUpstreamSandcastle({
     { cwd },
   );
 
-  return { createdPackageJson, version: UPSTREAM_SANDCASTLE_VERSION };
+  return { version: UPSTREAM_SANDCASTLE_VERSION };
 }

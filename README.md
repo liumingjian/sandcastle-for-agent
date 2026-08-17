@@ -11,7 +11,7 @@
 上游 Sandcastle 负责 worktree、sandbox、agent provider 和提交收集。本工具在它之上
 提供一条固定的本地 Codex 路径：
 
-1. 安装并固定 `@ai-hero/sandcastle@0.12.0`。
+1. 通过 `npx` 使用固定版本的 `@ai-hero/sandcastle@0.12.0`。
 2. 调用上游初始化 Codex + Docker + GitHub Issues Harness。
 3. 自动读取宿主 `~/.codex/config.toml` 和 `~/.codex/auth.json`。
 4. 应用四阶段模型配置和 `ready-for-agent` Issue 过滤规则。
@@ -42,8 +42,9 @@ cd /path/to/existing-repo
 npx github:liumingjian/sandcastle-for-agent init
 ```
 
-交互过程只询问是否加载推荐的四阶段模型配置。确认后，命令会安装依赖、调用上游
-Sandcastle、生成配置并构建 Docker 镜像。
+交互过程只询问是否加载推荐的四阶段模型配置。确认后，命令会调用上游 Sandcastle、
+生成配置并构建 Docker 镜像。它不会创建或修改目标项目的 `package.json`、
+`package-lock.json`、`pnpm-lock.yaml`、`yarn.lock` 或 `bun.lock`。
 
 成功时会输出：
 
@@ -160,7 +161,8 @@ npx github:liumingjian/sandcastle-for-agent --help
 ```
 
 `configure` 会更新本工具管理的配置和 prompts，但保留 `.env` 与上游生成的
-`main.mts`。
+`main.mts`。`main.mts` 是上游模板文件；`sandcastle-for-agent run` 使用本工具随
+`npx` 提供的固定依赖，不要求把 Sandcastle 追加到目标项目的依赖中。
 
 ## Issue Selection
 
@@ -175,7 +177,7 @@ gh issue list --state open --label ready-for-agent
 ## Limitations
 
 - 只支持 Codex + Docker + GitHub Issues。
-- 初始化使用 npm；其他包管理器项目会额外生成 `package-lock.json`。
+- 初始化不会修改目标项目的包管理器文件；项目依赖仍由项目自身的包管理器管理。
 - 只复用文件形式的 `~/.codex/auth.json`，不读取系统 keyring 凭据。
 - 仓库仍处于早期阶段，当前没有开源许可证。
 

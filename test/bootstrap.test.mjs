@@ -9,7 +9,7 @@ import {
 } from "../src/bootstrap.mjs";
 import { UPSTREAM_SANDCASTLE_VERSION } from "../src/constants.mjs";
 
-test("initialization installs and invokes the pinned upstream Harness", async () => {
+test("initialization invokes the pinned upstream Harness", async () => {
   /** @type {{file: string, args: string[]}[]} */
   const calls = [];
   /** @param {string} file @param {string[]} args */
@@ -30,22 +30,14 @@ test("initialization installs and invokes the pinned upstream Harness", async ()
   });
 
   assert.deepEqual(result, {
-    createdPackageJson: true,
     version: UPSTREAM_SANDCASTLE_VERSION,
   });
-  assert.deepEqual(calls[0], { file: "npm", args: ["init", "--yes"] });
-  assert.deepEqual(calls[1]?.args.slice(0, 4), [
-    "install",
-    "--save-dev",
-    "--save-exact",
-    `@ai-hero/sandcastle@${UPSTREAM_SANDCASTLE_VERSION}`,
-  ]);
-  assert.deepEqual(calls[2], {
-    file: "npm",
-    args: [
-      "exec",
-      "--",
-      "sandcastle",
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0]?.file, process.execPath);
+  assert.ok(calls[0]?.args[0]?.endsWith(
+    "/node_modules/@ai-hero/sandcastle/dist/main.js",
+  ));
+  assert.deepEqual(calls[0]?.args.slice(1), [
       "init",
       "--agent",
       "codex",
@@ -61,8 +53,7 @@ test("initialization installs and invokes the pinned upstream Harness", async ()
       "false",
       "--build-image",
       "false",
-    ],
-  });
+  ]);
 });
 
 test("initialization keeps an existing package.json and rejects an existing Harness", async () => {
@@ -92,6 +83,27 @@ test("initialization keeps an existing package.json and rejects an existing Harn
   await assert.doesNotReject(() =>
     assertConfigurationTarget({ cwd: "/repo", accessFile: existingHarness }),
   );
+});
+
+test("initialization does not modify the target package manager files", async () => {
+  /** @type {{file: string, args: string[]}[]} */
+  const calls = [];
+  /** @param {string} path */
+  const existingPackage = async (path) => {
+    if (path === join("/repo", "package.json")) return;
+    throw new Error("missing");
+  };
+
+  await initializeUpstreamSandcastle({
+    cwd: "/repo",
+    accessFile: existingPackage,
+    exec: async (file, args) => {
+      calls.push({ file, args });
+    },
+  });
+
+  assert.equal(calls.some(({ args }) => args[0] === "install"), false);
+  assert.equal(calls.some(({ args }) => args[1] === "init"), true);
 });
 
 test("initializer preflight checks local auth, npm, Docker, gh and Codex", async () => {
