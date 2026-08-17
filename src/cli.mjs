@@ -73,7 +73,7 @@ Usage:
   sandcastle-for-agent run
 
 Commands:
-  init        Check, install and configure the complete Harness in this Git repo
+  init        Check, install and configure the upstream Harness in this Git repo
   configure   Update the host-Codex overlay in an existing Harness
   build       Regenerate main.ts/main.mts and build the Docker image
   run         Validate host Codex, GitHub label and image, then run the workflow
@@ -85,7 +85,7 @@ Options:
   --no-global-agents            Do not mount the global AGENTS.md
   --<stage>-model <model>        Override planner/implementer/reviewer/merger
   --<stage>-effort <effort>      ${EFFORTS.join(" | ")}
-  --build / --no-build           Build the Docker image (default for init: build)
+  --build / --no-build           Also build during init/configure (default: no build)
   -h, --help                     Show help
   -v, --version                  Show version
 
@@ -273,25 +273,33 @@ async function initialize(values) {
     workflow: config.workflow,
   });
   await scaffoldProject({ cwd, config, allowExisting: true });
-  const mainEntry = await rewriteMainEntry({
-    cwd,
-    workflow: config.workflow,
-    refresh: true,
-  });
   await ensureHarnessDependencies({ cwd });
-  await ensureRunScript(cwd, mainEntry.filename);
 
   const buildChoice = booleanChoice(values, "build", "no-build");
-  const shouldBuild = buildChoice ?? true;
-  if (shouldBuild) await buildImage({ cwd, config });
+  const shouldBuild = buildChoice ?? false;
+  if (shouldBuild) {
+    const mainEntry = await rewriteMainEntry({
+      cwd,
+      workflow: config.workflow,
+      refresh: true,
+    });
+    await ensureRunScript(cwd, mainEntry.filename);
+    await buildImage({ cwd, config });
+  }
 
   const result = `Initialized ${config.workflow} with @ai-hero/sandcastle@${upstream.version}`;
   if (isInteractive) {
+    const next = shouldBuild
+      ? `npm run ${PACKAGE_NAME}`
+      : `npx ${PACKAGE_NAME} build, then npm run ${PACKAGE_NAME}`;
     clack.outro(
-      `${result}. Set GH_TOKEN in .sandcastle/.env, then run npx ${PACKAGE_NAME} run.`,
+      `${result}. Next run ${next}.`,
     );
   } else {
     console.log(`${result} in ${cwd}`);
+    if (!shouldBuild) {
+      console.log(`Next: npx ${PACKAGE_NAME} build && npm run ${PACKAGE_NAME}`);
+    }
   }
 }
 
@@ -329,8 +337,11 @@ async function configure(values) {
   }
 
   if (isInteractive) {
+    const next = shouldBuild
+      ? `npm run ${PACKAGE_NAME}`
+      : `npx ${PACKAGE_NAME} build, then npm run ${PACKAGE_NAME}`;
     clack.outro(
-      `Configured ${config.workflow}. Set GH_TOKEN in .sandcastle/.env, then run npx ${PACKAGE_NAME} run.`,
+      `Configured ${config.workflow}. Next run ${next}.`,
     );
   } else {
     console.log(`Configured ${config.workflow} in ${cwd}`);

@@ -45,14 +45,11 @@ cd /path/to/existing-repo
 npx github:liumingjian/sandcastle-for-agent init
 ```
 
-交互过程只询问是否加载推荐的四阶段模型配置。确认后，命令会调用上游 Sandcastle、
-生成配置、生成工作流入口并构建 Docker 镜像。已有项目只会在 `package.json` 的
-`scripts` 中增加 `sandcastle-for-agent`，不会修改依赖字段或任何 lock 文件。
-如果项目已经使用同名脚本但命令不同，构建会停止并要求先处理脚本命名冲突，不会静默覆盖。
+交互过程只询问是否加载推荐的四阶段模型配置。确认后，命令会调用上游 Sandcastle，
+生成基础 Harness 配置和上游工作流入口，但不会改写入口或构建 Docker 镜像。
 
 初始化会在 `.sandcastle/` 内创建独立的 Harness 依赖包，并执行一次
-`npm install --prefix .sandcastle`。如果目标仓库没有根 `package.json`，脚本也会隔离在
-`.sandcastle/package.json` 中。
+`npm install --prefix .sandcastle`，不会修改目标项目的依赖或 lock 文件。
 
 成功时会输出：
 
@@ -72,7 +69,28 @@ git add <project-files> .sandcastle
 git commit -m "Initialize Sandcastle Harness"
 ```
 
-### 2. 配置 GitHub token
+### 2. 构建适配入口
+
+```bash
+npx github:liumingjian/sandcastle-for-agent build
+```
+
+`build` 会从固定的 `@ai-hero/sandcastle@0.12.0` 模板重新生成并改写
+`.sandcastle/main.ts` 或 `.sandcastle/main.mts`，写入宿主 Codex 的 mount 和阶段模型，
+然后构建 Docker 镜像。构建完成后，它会在项目 `package.json` 中只增加一个 script：
+
+```json
+{"scripts":{"sandcastle-for-agent":"npx tsx .sandcastle/main.ts"}}
+```
+
+如果项目已经使用同名 script 但命令不同，构建会停止并要求先处理脚本命名冲突，不会静默覆盖。
+没有根 `package.json` 时，script 会写入 `.sandcastle/package.json`。
+
+### 3. 运行
+
+首次运行前，先配置 GitHub token 和需要处理的 Issue。
+
+#### 配置 GitHub token
 
 ```bash
 cp .sandcastle/.env.example .sandcastle/.env
@@ -89,9 +107,9 @@ GH_TOKEN=github_pat_xxx
 - Issues: Read and write
 - Metadata: Read-only
 
-### 3. 标记要处理的 Issue
+#### 标记要处理的 Issue
 
-运行前，仓库中必须存在 `ready-for-agent` 标签。把它添加到需要实现的 open Issue：
+仓库中必须存在 `ready-for-agent` 标签。把它添加到需要实现的 open Issue：
 
 ```bash
 gh issue edit 123 --add-label ready-for-agent
@@ -99,19 +117,23 @@ gh issue edit 123 --add-label ready-for-agent
 
 本工具不会创建标签，也不会处理没有该标签的 Issue。
 
-### 4. 运行
+#### 执行生成的 script
 
 ```bash
-npx github:liumingjian/sandcastle-for-agent run
+npm run sandcastle-for-agent
 ```
 
-`run` 只执行 `build` 生成的项目脚本。对于有根 `package.json` 的项目，脚本内容是：
+这条命令就是上游入口的执行封装。对于有根 `package.json` 的项目，实际执行的是：
 
 ```bash
 npx tsx .sandcastle/main.ts
 ```
 
 如果上游根据项目类型生成的是 `main.mts`，脚本会自动使用对应扩展名。
+没有根 `package.json` 时，执行 `npm --prefix .sandcastle run sandcastle-for-agent`。
+
+`npx github:liumingjian/sandcastle-for-agent run` 仍可作为带环境、标签和镜像预检的可选入口，
+但 Quick Start 的标准流程是 `npm run sandcastle-for-agent`。
 
 工作流会读取带标签的 open Issues，完成规划、并行实现、审查和合并。没有符合条件的
 Issue 时会正常结束。上游的 worktree、sandbox、提交和合并生命周期没有被本工具重新实现。
@@ -192,10 +214,10 @@ sandcastle-for-agent build
 sandcastle-for-agent run
 ```
 
-- `init`：检查环境，调用上游初始化，生成入口和脚本，并构建镜像。
+- `init`：检查环境，调用上游初始化，生成基础配置并安装 Harness 依赖；不改写入口、不生成 script、不构建镜像。
 - `configure`：更新宿主 Codex 和阶段配置，补齐 `.sandcastle/` 内缺失的 Harness 依赖。
 - `build`：按固定的 `@ai-hero/sandcastle@0.12.0` 重新生成 `main.ts/main.mts`、脚本和 Docker 镜像。
-- `run`：检查认证、标签和镜像后执行生成的项目脚本。
+- `run`：可选的预检包装命令；标准流程直接执行 `npm run sandcastle-for-agent`。
 
 查看高级模型、工作流和构建参数：
 
