@@ -101,6 +101,17 @@ npx github:liumingjian/sandcastle-for-agent run
 工作流会读取带标签的 open Issues，完成规划、并行实现、审查和合并。没有符合条件的
 Issue 时会正常结束。
 
+如果运行时出现 `Missing optional dependency @openai/codex-linux-arm64` 或
+`@openai/codex-linux-x64`，说明当前项目使用的是旧 Docker 镜像。重新构建一次即可：
+
+```bash
+npx github:liumingjian/sandcastle-for-agent configure --no-build
+npx github:liumingjian/sandcastle-for-agent build
+```
+
+新镜像会显式安装当前架构的 Codex optional dependency，并在构建阶段执行
+`codex --version` 验证。
+
 ## Host Codex Configuration
 
 Codex 配置来自宿主机，不需要 `baseUrl` 参数：

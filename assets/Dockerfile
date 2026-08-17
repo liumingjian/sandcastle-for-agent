@@ -20,7 +20,8 @@ RUN groupmod -o -g $AGENT_GID node \
   && usermod -o -u $AGENT_UID -g $AGENT_GID -d /home/agent -m -l agent node \
   && install -d -o $AGENT_UID -g $AGENT_GID /home/agent/.codex
 
-RUN npm install -g @openai/codex
+RUN npm install --include=optional -g @openai/codex \
+  && codex --version
 
 USER ${AGENT_UID}:${AGENT_GID}
 WORKDIR /home/agent
