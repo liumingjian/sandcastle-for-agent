@@ -33,7 +33,7 @@ import {
 import { runConfiguredProject } from "./run.mjs";
 import { scaffoldProject } from "./scaffold.mjs";
 
-const VERSION = "0.1.0";
+const VERSION = UPSTREAM_SANDCASTLE_VERSION;
 const isInteractive = process.stdin.isTTY === true && process.stdout.isTTY === true;
 
 /** @type {Record<string, {type: "string" | "boolean", short?: string}>} */

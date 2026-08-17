@@ -6,6 +6,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import test from "node:test";
+import { UPSTREAM_SANDCASTLE_VERSION } from "../src/constants.mjs";
 
 const exec = promisify(execFile);
 const packageRoot = dirname(fileURLToPath(new URL("../package.json", import.meta.url)));
@@ -17,6 +18,11 @@ test("CLI help works without an explicit command", async () => {
   assert.match(stdout, /only processes open issues labeled ready-for-agent/);
   assert.doesNotMatch(stdout, /--create-label/);
   assert.doesNotMatch(stdout, /--base-url/);
+});
+
+test("CLI reports the pinned release version", async () => {
+  const { stdout } = await exec(process.execPath, [cli, "--version"]);
+  assert.equal(stdout.trim(), UPSTREAM_SANDCASTLE_VERSION);
 });
 
 test("configure overlays an existing Harness and preserves custom models", async (t) => {
