@@ -56,6 +56,29 @@ test("initialization invokes the pinned upstream Harness", async () => {
   ]);
 });
 
+test("initialization resolves a hoisted upstream dependency from the npx root", async () => {
+  /** @type {string[][]} */
+  const calls = [];
+  const hoistedCliPath =
+    "/npx-root/node_modules/@ai-hero/sandcastle/dist/main.js";
+  const hoistedPackageEntry =
+    "/npx-root/node_modules/@ai-hero/sandcastle/dist/index.js";
+
+  await initializeUpstreamSandcastle({
+    cwd: "/repo",
+    accessFile: async () => {
+      throw new Error("missing");
+    },
+    resolveModule: (specifier) => {
+      assert.equal(specifier, "@ai-hero/sandcastle");
+      return hoistedPackageEntry;
+    },
+    exec: async (_file, args) => calls.push(args),
+  });
+
+  assert.equal(calls[0]?.[0], hoistedCliPath);
+});
+
 test("initialization keeps an existing package.json and rejects an existing Harness", async () => {
   /** @param {string} path */
   const existingPackage = async (path) => {

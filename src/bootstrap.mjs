@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import { access } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { withoutApiKeyEnv } from "./codex-host.mjs";
@@ -12,9 +12,21 @@ import {
 } from "./constants.mjs";
 
 const execFileAsync = promisify(execFile);
-const upstreamCliPath = fileURLToPath(
-  new URL("../node_modules/@ai-hero/sandcastle/dist/main.js", import.meta.url),
-);
+const upstreamPackageSpecifier = "@ai-hero/sandcastle";
+
+/** @param {string} specifier */
+const defaultResolveModule = (specifier) =>
+  fileURLToPath(import.meta.resolve(specifier));
+
+/**
+ * Resolve the upstream CLI through Node's module graph. npm may hoist the
+ * dependency to the npx cache root instead of nesting it in this package.
+ * @param {(specifier: string) => string} [resolveModule]
+ */
+export function resolveUpstreamCliPath(resolveModule = defaultResolveModule) {
+  const packageEntryPath = resolveModule(upstreamPackageSpecifier);
+  return join(dirname(packageEntryPath), "main.js");
+}
 
 /** @param {string} path @param {(path: string) => Promise<unknown>} accessFile */
 async function exists(path, accessFile) {
@@ -112,14 +124,17 @@ export async function preflightInitializer({
  * @param {object} options
  * @param {string} options.cwd
  * @param {(path: string) => Promise<unknown>} [options.accessFile]
+ * @param {(specifier: string) => string} [options.resolveModule]
  * @param {(file: string, args: string[], options: {cwd: string}) => Promise<unknown>} [options.exec]
  */
 export async function initializeUpstreamSandcastle({
   cwd,
   accessFile = access,
+  resolveModule = defaultResolveModule,
   exec = runStreamingCommand,
 }) {
   await assertInitializationTarget({ cwd, accessFile });
+  const upstreamCliPath = resolveUpstreamCliPath(resolveModule);
   await exec(
     process.execPath,
     [
