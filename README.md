@@ -55,7 +55,7 @@ Grill -> Spec -> to-tickets -> Implement -> Review
 先使用 Matt 的 `to-tickets` 技能，把已经确认的 Spec/PRD 拆成独立的 GitHub tickets，
 并保留它们之间的阻塞关系。这个仓库不替代 `to-tickets`，也不会创建 tickets。
 
-将准备交给 Agent 的 open ticket 添加 `ready-for-agent` 标签；这个标签只是交接筛选条件。
+将准备交给 Agent 的 open ticket 添加 `ready-for-agent` 标签。
 
 ### 1. 初始化 Harness
 
@@ -66,30 +66,13 @@ cd /path/to/existing-repo
 npx github:liumingjian/sandcastle-for-agent init
 ```
 
-交互过程只询问是否加载推荐的四阶段模型配置。确认后，命令会调用上游 Sandcastle，
-生成基础 Harness 配置和上游工作流入口，但不会改写入口或构建 Docker 镜像。
+交互过程只询问是否加载推荐的四阶段模型配置。确认后，命令会调用上游 Sandcastle
+生成基础 Harness 配置和上游工作流入口。
 
 初始化会在 `.sandcastle/` 内创建独立的 Harness 依赖包，并执行一次
 `npm install --prefix .sandcastle`，不会修改目标项目的依赖或 lock 文件。
 
-成功时会输出：
-
-```text
-Initialized parallel-planner-with-review with @ai-hero/sandcastle@0.12.0
-```
-
-如果仓库还没有 `ready-for-agent` 标签，初始化只会给出提示，不会中断；完成 ticket 交接后再创建
-标签并应用到需要执行的 tickets。
-
-初始化完成后先检查生成的 Harness 和项目基线，并创建一次 commit。新仓库不能只提交
-`.sandcastle`，项目源文件也必须进入基线 commit；Sandcastle 需要已有 commit 才能创建
-worktree 和 agent 分支：
-
-```bash
-git status
-git add <project-files> .sandcastle
-git commit -m "Initialize Sandcastle Harness"
-```
+如果仓库还没有 `ready-for-agent` 标签，初始化只提示并继续。
 
 ### 2. 构建适配入口
 
@@ -102,9 +85,15 @@ npx github:liumingjian/sandcastle-for-agent build
 然后构建 Docker 镜像。它不会创建、修改或格式化目标项目根目录的 `package.json`、
 依赖或 lock 文件。构建完成后会直接打印实际的入口执行命令。
 
+确认项目基线后提交 Harness：
+
+```bash
+git add -A && git commit -m "Initialize Sandcastle Harness"
+```
+
 ### 3. 运行
 
-首次运行前，先配置 GitHub token 和需要处理的 tickets。
+首次运行前，先配置 GitHub token，并确认需要处理的 open tickets 已带有 `ready-for-agent` 标签。
 
 #### 配置 GitHub token
 
@@ -122,16 +111,6 @@ GH_TOKEN=github_pat_xxx
 
 - Issues: Read and write
 - Metadata: Read-only
-
-#### 标记要处理的 ticket
-
-仓库中必须存在 `ready-for-agent` 标签。把它添加到 `to-tickets` 生成、准备实现的 open ticket：
-
-```bash
-gh issue edit 123 --add-label ready-for-agent
-```
-
-本工具不会创建标签，也不会处理没有该标签的 Issue。
 
 #### 执行生成的入口
 
@@ -268,14 +247,8 @@ Codex 兼容逻辑，不覆盖目标仓库中的 `.sandcastle/Dockerfile`。
 
 ## Ticket Handoff
 
-所有内置工作流都把 `ready-for-agent` 作为 ticket 交接标签，使用同一查询：
-
-```bash
-gh issue list --state open --label ready-for-agent
-```
-
-`init` 在标签不存在时只提示；`run` 会拒绝启动。查询不会退化为处理全部 open tickets，
-也不会绕过 `to-tickets` 的阻塞关系自行生成工作项。
+所有内置工作流都只处理带有 `ready-for-agent` 标签的 open tickets；ticket 创建和拆分仍由
+上游 `to-tickets` 完成。
 
 ## Limitations
 
