@@ -90,6 +90,10 @@ test("configure overlays an existing Harness and preserves custom models", async
       "merger-local",
       "--merger-effort",
       "low",
+      "--max-cycles",
+      "12",
+      "--max-parallel",
+      "3",
       "--no-global-agents",
       "--no-build",
     ],
@@ -100,6 +104,8 @@ test("configure overlays an existing Harness and preserves custom models", async
   const initial = JSON.parse(await readFile(configPath, "utf8"));
   assert.equal(initial.stages.planner.model, "planner-local");
   assert.equal(initial.stages.merger.effort, "low");
+  assert.equal(initial.maxCycles, 12);
+  assert.equal(initial.maxParallel, 3);
 
   await exec(
     process.execPath,

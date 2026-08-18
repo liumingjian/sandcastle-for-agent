@@ -14,6 +14,8 @@ test("recommended config contains stage-specific model defaults", () => {
   });
 
   assert.equal(config.imageName, "sandcastle:my-project");
+  assert.equal(config.maxCycles, 50);
+  assert.equal(config.maxParallel, 5);
   assert.deepEqual(config.stages.planner, {
     model: "gpt-5.6-sol",
     effort: "xhigh",
@@ -41,6 +43,28 @@ test("custom active-stage settings override a preset", () => {
     model: "local-model",
     effort: "medium",
   });
+});
+
+test("parallel execution settings are configurable", () => {
+  const config = createProjectConfig({
+    workflow: "parallel-planner-with-review",
+    projectName: "repo",
+    maxCycles: 12,
+    maxParallel: 3,
+  });
+
+  assert.equal(config.maxCycles, 12);
+  assert.equal(config.maxParallel, 3);
+});
+
+test("old configs default maxParallel during validation", () => {
+  const config = createProjectConfig({
+    workflow: "simple-loop",
+    projectName: "repo",
+  });
+  const { maxParallel: _maxParallel, ...legacy } = config;
+
+  assert.equal(validateProjectConfig(legacy).maxParallel, 5);
 });
 
 test("validation rejects invalid active stages", () => {

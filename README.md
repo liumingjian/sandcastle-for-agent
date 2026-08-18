@@ -177,8 +177,11 @@ provider 字段，不复制宿主 MCP、项目信任或其他机器配置。Code
 [Configuration Reference](https://developers.openai.com/codex/config-reference/)。
 
 `.sandcastle/for-agent.json` 由适配入口在 `main.ts/main.mts` 启动时读取。它保存工作流、各阶段
-模型和思考模式、最大迭代次数以及用户选择的全局 `AGENTS.md` 挂载开关。因此修改这些运行时配置不需要
-重写上游编排。切换工作流或升级固定上游版本时，执行 `build` 重新生成入口。
+模型和思考模式、最大迭代次数、最大并行数以及用户选择的全局 `AGENTS.md` 挂载开关。因此修改这些
+运行时配置不需要重写上游编排。切换工作流或升级固定上游版本时，执行 `build` 重新生成入口。
+
+运行规模可直接在 `.sandcastle/for-agent.json` 中调整：`maxCycles` 对应 `MAX_ITERATIONS`，
+`maxParallel` 对应 `MAX_PARALLEL`（默认分别为 `50` 和 `5`）。
 
 ## Default Workflow
 

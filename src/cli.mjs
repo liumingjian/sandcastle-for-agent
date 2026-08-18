@@ -21,6 +21,9 @@ import {
 } from "./config.mjs";
 import {
   EFFORTS,
+  DEFAULT_MAX_CYCLES,
+  DEFAULT_MAX_PARALLEL,
+  DEFAULT_IMPLEMENTER_MAX_ITERATIONS,
   MODEL_PRESETS,
   PACKAGE_NAME,
   UPSTREAM_SANDCASTLE_VERSION,
@@ -47,6 +50,7 @@ const optionDefinitions = {
   "no-global-agents": { type: "boolean" },
   "image-name": { type: "string" },
   "max-cycles": { type: "string" },
+  "max-parallel": { type: "string" },
   "implementer-max-iterations": { type: "string" },
   "planner-model": { type: "string" },
   "planner-effort": { type: "string" },
@@ -85,6 +89,8 @@ Options:
   --no-global-agents            Do not mount the global AGENTS.md
   --<stage>-model <model>        Override planner/implementer/reviewer/merger
   --<stage>-effort <effort>      ${EFFORTS.join(" | ")}
+  --max-cycles <n>               Maximum plan/execute/merge cycles
+  --max-parallel <n>             Maximum parallel issue pipelines
   --build / --no-build           Also build during init/configure (default: no build)
   -h, --help                     Show help
   -v, --version                  Show version
@@ -244,12 +250,17 @@ async function resolveConfiguration(values, existing, cwd) {
       : existing?.imageName,
     maxCycles: positiveInteger(
       values["max-cycles"]?.toString(),
-      existing?.maxCycles ?? 50,
+      existing?.maxCycles ?? DEFAULT_MAX_CYCLES,
       "max-cycles",
+    ),
+    maxParallel: positiveInteger(
+      values["max-parallel"]?.toString(),
+      existing?.maxParallel ?? DEFAULT_MAX_PARALLEL,
+      "max-parallel",
     ),
     implementerMaxIterations: positiveInteger(
       values["implementer-max-iterations"]?.toString(),
-      existing?.implementerMaxIterations ?? 100,
+      existing?.implementerMaxIterations ?? DEFAULT_IMPLEMENTER_MAX_ITERATIONS,
       "implementer-max-iterations",
     ),
   });

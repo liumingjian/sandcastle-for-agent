@@ -4,6 +4,9 @@ export const CONFIG_VERSION = 1;
 export const ISSUE_LABEL = "ready-for-agent";
 export const CONFIG_DIR = ".sandcastle";
 export const CONFIG_FILE = "for-agent.json";
+export const DEFAULT_MAX_CYCLES = 50;
+export const DEFAULT_MAX_PARALLEL = 5;
+export const DEFAULT_IMPLEMENTER_MAX_ITERATIONS = 100;
 
 /** @typedef {"planner" | "implementer" | "reviewer" | "merger"} StageName */
 /** @typedef {"low" | "medium" | "high" | "xhigh" | "max"} ReasoningEffort */

@@ -5,6 +5,7 @@ import { parse } from "smol-toml";
 
 const CONFIG_DIR = ".sandcastle";
 const CONFIG_FILE = "for-agent.json";
+const DEFAULT_MAX_PARALLEL = 5;
 const hostOnlyNames = new Set(["localhost", "127.0.0.1", "0.0.0.0", "[::1]", "[::]"]);
 
 /** @param {string} value */
@@ -176,7 +177,11 @@ async function detectProjectSetup(cwd) {
  */
 export async function loadHostCodexContext({ cwd, home = homedir() }) {
   const configPath = join(cwd, CONFIG_DIR, CONFIG_FILE);
-  const config = JSON.parse(await readFile(configPath, "utf8"));
+  const storedConfig = JSON.parse(await readFile(configPath, "utf8"));
+  const config = {
+    ...storedConfig,
+    maxParallel: storedConfig.maxParallel ?? DEFAULT_MAX_PARALLEL,
+  };
   const env = {
     ...process.env,
     ...parseEnv(await readOptional(join(cwd, CONFIG_DIR, ".env"))),

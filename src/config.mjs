@@ -4,6 +4,9 @@ import {
   CONFIG_DIR,
   CONFIG_FILE,
   CONFIG_VERSION,
+  DEFAULT_IMPLEMENTER_MAX_ITERATIONS,
+  DEFAULT_MAX_CYCLES,
+  DEFAULT_MAX_PARALLEL,
   EFFORTS,
   MODEL_PRESETS,
   WORKFLOWS,
@@ -20,6 +23,7 @@ import {
  * @property {boolean} loadGlobalAgents
  * @property {string} imageName
  * @property {number} maxCycles
+ * @property {number} maxParallel
  * @property {number} implementerMaxIterations
  * @property {Record<StageName, StageConfig>} stages
  */
@@ -60,6 +64,7 @@ export function getWorkflow(workflow) {
  * @param {boolean} [input.loadGlobalAgents]
  * @param {string} [input.imageName]
  * @param {number} [input.maxCycles]
+ * @param {number} [input.maxParallel]
  * @param {number} [input.implementerMaxIterations]
  * @returns {ProjectConfig}
  */
@@ -81,8 +86,10 @@ export function createProjectConfig(input) {
     workflow: input.workflow,
     loadGlobalAgents: input.loadGlobalAgents ?? false,
     imageName: input.imageName ?? normalizeImageName(input.projectName),
-    maxCycles: input.maxCycles ?? 50,
-    implementerMaxIterations: input.implementerMaxIterations ?? 100,
+    maxCycles: input.maxCycles ?? DEFAULT_MAX_CYCLES,
+    maxParallel: input.maxParallel ?? DEFAULT_MAX_PARALLEL,
+    implementerMaxIterations:
+      input.implementerMaxIterations ?? DEFAULT_IMPLEMENTER_MAX_ITERATIONS,
     stages,
   });
 }
@@ -104,7 +111,10 @@ export function validateProjectConfig(value) {
   if (typeof config.imageName !== "string" || !config.imageName.trim()) {
     throw new ConfigError("imageName must be a non-empty string.");
   }
-  for (const key of ["maxCycles", "implementerMaxIterations"]) {
+  // `maxParallel` was added after the first config format shipped. Normalize
+  // older files so they remain runnable without a configure step.
+  if (config.maxParallel === undefined) config.maxParallel = DEFAULT_MAX_PARALLEL;
+  for (const key of ["maxCycles", "maxParallel", "implementerMaxIterations"]) {
     const number = config[key];
     if (!Number.isInteger(number) || Number(number) < 1) {
       throw new ConfigError(`${key} must be a positive integer.`);

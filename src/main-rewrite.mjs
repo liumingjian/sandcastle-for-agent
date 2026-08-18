@@ -83,6 +83,10 @@ export function adaptUpstreamMain(source, workflow) {
       "const MAX_ITERATIONS = config.maxCycles;",
     );
     content = content.replace(
+      /const MAX_PARALLEL = \d+;/,
+      "const MAX_PARALLEL = config.maxParallel;",
+    );
+    content = content.replace(
       /maxIterations:\s*100\b/g,
       "maxIterations: config.implementerMaxIterations",
     );

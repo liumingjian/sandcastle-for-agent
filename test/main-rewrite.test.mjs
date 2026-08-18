@@ -41,6 +41,7 @@ test("rewrites all stages in the upstream parallel planner template", () => {
     'import { docker } from "@ai-hero/sandcastle/sandboxes/docker";',
     "",
     "const MAX_ITERATIONS = 10;",
+    "const MAX_PARALLEL = 5;",
     "await sandcastle.run({ sandbox: docker(), agent: sandcastle.codex(\"planner\"), maxIterations: 1 });",
     "await sandcastle.run({ sandbox: docker(), agent: sandcastle.codex(\"implementer\"), maxIterations: 100 });",
     "await sandcastle.run({ sandbox: docker(), agent: sandcastle.codex(\"reviewer\"), maxIterations: 1 });",
@@ -50,6 +51,7 @@ test("rewrites all stages in the upstream parallel planner template", () => {
 
   const rewritten = adaptUpstreamMain(source, "parallel-planner-with-review");
   assert.match(rewritten, /const MAX_ITERATIONS = config\.maxCycles/);
+  assert.match(rewritten, /const MAX_PARALLEL = config\.maxParallel/);
   assert.match(rewritten, /agent\("planner"\)/);
   assert.match(rewritten, /agent\("implementer"\)/);
   assert.match(rewritten, /agent\("reviewer"\)/);

@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import test from "node:test";
 import { join } from "node:path";
 import {
@@ -41,6 +43,33 @@ url = "https://private.example.com"
   assert.doesNotMatch(source, /^model\s*=/m);
   assert.doesNotMatch(source, /review_model/);
   assert.doesNotMatch(source, /do-not-copy|mcp_servers|private\.example/);
+});
+
+test("runtime configuration defaults maxParallel for older Harness files", async (t) => {
+  const cwd = await mkdtemp(join(tmpdir(), "sandcastle-for-agent-runtime-config-"));
+  t.after(() => rm(cwd, { recursive: true, force: true }));
+  const home = join(cwd, "home");
+  await mkdir(join(cwd, ".sandcastle"), { recursive: true });
+  await mkdir(join(home, ".codex"), { recursive: true });
+  await writeFile(
+    join(cwd, ".sandcastle", "for-agent.json"),
+    JSON.stringify({
+      version: 1,
+      workflow: "simple-loop",
+      loadGlobalAgents: false,
+      imageName: "sandcastle:fixture",
+      maxCycles: 50,
+      implementerMaxIterations: 100,
+      stages: { implementer: { model: "local", effort: "medium" } },
+    }),
+  );
+  await writeFile(join(cwd, ".sandcastle", ".env"), "GH_TOKEN=test-token\n");
+  await writeFile(join(home, ".codex", "config.toml"), "model = \"local\"\n");
+  await writeFile(join(home, ".codex", "auth.json"), "{}\n");
+
+  const { loadHostCodexContext } = await import("../assets/for-agent-runtime.mjs");
+  const context = await loadHostCodexContext({ cwd, home });
+  assert.equal(context.config.maxParallel, 5);
 });
 
 test("only host-local provider addresses are rewritten for Docker", () => {
