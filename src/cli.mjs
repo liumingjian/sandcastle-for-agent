@@ -27,6 +27,7 @@ import {
   WORKFLOWS,
 } from "./constants.mjs";
 import { getReadyLabelWarning } from "./github.mjs";
+import { resolveGlobalAgents } from "./global-agents.mjs";
 import {
   loadProjectEnv,
   projectName,
@@ -143,7 +144,7 @@ function recommendedConfigSummary() {
     `Reviewer: ${stages.reviewer.model} / ${stages.reviewer.effort}`,
     `Merger: ${stages.merger.model} / ${stages.merger.effort}`,
     "Codex config: detect ~/.codex/config.toml and ~/.codex/auth.json",
-    "Global AGENTS.md: load automatically when the host file exists",
+    "Global AGENTS.md: choose whether to mount ~/.codex/AGENTS.md",
   ].join("\n");
 }
 
@@ -214,11 +215,21 @@ async function resolveConfiguration(values, existing, cwd) {
 
   const agentsChoice = booleanChoice(values, "global-agents", "no-global-agents");
   const detectedGlobalAgents = await hostGlobalAgentsExists();
-  const loadGlobalAgents =
-    agentsChoice ??
-    (useRecommended
-      ? detectedGlobalAgents
-      : existing?.loadGlobalAgents ?? detectedGlobalAgents);
+  const loadGlobalAgents = await resolveGlobalAgents({
+    explicit: agentsChoice,
+    detected: detectedGlobalAgents,
+    existing: existing?.loadGlobalAgents,
+    interactive: isInteractive,
+    ask: async (initialValue) =>
+      Boolean(
+        unwrapPrompt(
+          await clack.confirm({
+            message: "Mount ~/.codex/AGENTS.md into each sandbox?",
+            initialValue,
+          }),
+        ),
+      ),
+  });
 
   return createProjectConfig({
     workflow,

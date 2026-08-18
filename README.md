@@ -1,11 +1,25 @@
 # Sandcastle for Agent
 
-在现有 Git 仓库中初始化一个使用宿主 Codex、Docker 和 GitHub Issues 的
-[Sandcastle](https://github.com/mattpocock/sandcastle) Harness。
+这是 Matt Pocock 的
+[Sandcastle](https://github.com/mattpocock/sandcastle) 在本地 Codex 环境下的执行适配层。
+它面向已经完成需求拆解、准备进入 Implement 阶段的 GitHub tickets。
 
-它复用本机已经登录的 Codex 环境，按 Planner、Implementer、Reviewer、Merger
-四个阶段处理带有 `ready-for-agent` 标签的 Issue。工作流编排仍由上游生成的
-`.sandcastle/main.ts` 或 `.sandcastle/main.mts` 负责，本工具只为它接入宿主 Codex 配置。
+工作流编排仍由上游生成的 `.sandcastle/main.ts` 或 `.sandcastle/main.mts` 负责，本工具只为
+它接入宿主 Codex 配置、Docker mount 和阶段模型。
+
+## Where It Fits
+
+本仓库位于 Matt 的需求到实现链路之后：
+
+```text
+Grill -> Spec -> to-tickets -> Implement -> Review
+                              ^
+                     Sandcastle for Agent
+```
+
+- `Grill`、`Spec` 和 `to-tickets` 负责澄清需求、形成 PRD，并拆出带阻塞关系的实施 tickets。
+- 将准备交给 Agent 的 open ticket 标记为 `ready-for-agent`，作为实现交接信号。
+- 本仓库从这些 tickets 开始执行，不负责创建 PRD、拆 ticket 或设计阻塞关系。
 
 ## What Is Sandcastle for Agent?
 
@@ -16,7 +30,7 @@
 2. 调用上游初始化 Codex + Docker + GitHub Issues Harness，保留上游的 `main.ts/main.mts` 编排。
 3. 在 `build` 阶段直接修正入口中的 `codex()`、`docker()`、`mounts` 和模型配置。
 4. 自动读取宿主 `~/.codex/config.toml` 和 `~/.codex/auth.json`。
-5. 应用四阶段模型配置和 `ready-for-agent` Issue 过滤规则。
+5. 应用四阶段模型配置，并只执行带 `ready-for-agent` 交接标签的 open tickets。
 6. 构建可直接运行的 Docker 镜像。
 
 不需要克隆本仓库，也不需要先单独执行上游向导。
@@ -35,6 +49,13 @@
 `init` 会检查这些条件。Codex provider、认证文件和本地网关地址不需要在向导中重复输入。
 
 ## Quick Start
+
+### 0. 先准备实施 tickets
+
+先使用 Matt 的 `to-tickets` 技能，把已经确认的 Spec/PRD 拆成独立的 GitHub tickets，
+并保留它们之间的阻塞关系。这个仓库不替代 `to-tickets`，也不会创建 tickets。
+
+将准备交给 Agent 的 open ticket 添加 `ready-for-agent` 标签；这个标签只是交接筛选条件。
 
 ### 1. 初始化 Harness
 
@@ -57,7 +78,8 @@ npx github:liumingjian/sandcastle-for-agent init
 Initialized parallel-planner-with-review with @ai-hero/sandcastle@0.12.0
 ```
 
-如果仓库还没有 `ready-for-agent` 标签，初始化只会给出提示，不会中断。
+如果仓库还没有 `ready-for-agent` 标签，初始化只会给出提示，不会中断；完成 ticket 交接后再创建
+标签并应用到需要执行的 tickets。
 
 初始化完成后先检查生成的 Harness 和项目基线，并创建一次 commit。新仓库不能只提交
 `.sandcastle`，项目源文件也必须进入基线 commit；Sandcastle 需要已有 commit 才能创建
@@ -82,7 +104,7 @@ npx github:liumingjian/sandcastle-for-agent build
 
 ### 3. 运行
 
-首次运行前，先配置 GitHub token 和需要处理的 Issue。
+首次运行前，先配置 GitHub token 和需要处理的 tickets。
 
 #### 配置 GitHub token
 
@@ -101,9 +123,9 @@ GH_TOKEN=github_pat_xxx
 - Issues: Read and write
 - Metadata: Read-only
 
-#### 标记要处理的 Issue
+#### 标记要处理的 ticket
 
-仓库中必须存在 `ready-for-agent` 标签。把它添加到需要实现的 open Issue：
+仓库中必须存在 `ready-for-agent` 标签。把它添加到 `to-tickets` 生成、准备实现的 open ticket：
 
 ```bash
 gh issue edit 123 --add-label ready-for-agent
@@ -122,8 +144,8 @@ npx tsx .sandcastle/main.mts
 `npx github:liumingjian/sandcastle-for-agent run` 仍可作为带环境、标签和镜像预检的可选入口，
 它最终也会直接执行同一个 `npx tsx .sandcastle/main.*` 入口。
 
-工作流会读取带标签的 open Issues，完成规划、并行实现、审查和合并。没有符合条件的
-Issue 时会正常结束。上游的 worktree、sandbox、提交和合并生命周期没有被本工具重新实现。
+工作流会读取带标签的 open tickets，完成规划、并行实现、审查和合并。没有符合条件的
+ticket 时会正常结束。上游的 worktree、sandbox、提交和合并生命周期没有被本工具重新实现。
 
 Sandcastle 的 worktree 是临时目录：当实现分支已经提交且阶段正常结束时，
 `sandbox.close()` 会删除这个干净的 worktree，但会保留 `sandcastle/*` Git 分支；
@@ -158,7 +180,7 @@ Codex 配置来自宿主机，不需要 `baseUrl` 参数：
 
 - `~/.codex/config.toml`：读取当前 `model_provider` 和对应 provider 配置。
 - `~/.codex/auth.json`：只读挂载到容器，不复制到项目。
-- `~/.codex/AGENTS.md`：存在时默认只读挂载。
+- `~/.codex/AGENTS.md`：初始化或配置时由用户确认是否只读挂载；不会因为文件存在而自动挂载。
 
 容器不能通过 `localhost` 访问宿主服务。本工具会自动转换宿主专用地址：
 
@@ -176,7 +198,7 @@ provider 字段，不复制宿主 MCP、项目信任或其他机器配置。Code
 [Configuration Reference](https://developers.openai.com/codex/config-reference/)。
 
 `.sandcastle/for-agent.json` 由适配入口在 `main.ts/main.mts` 启动时读取。它保存工作流、各阶段
-模型和思考模式、最大迭代次数以及是否挂载全局 `AGENTS.md`。因此修改这些运行时配置不需要
+模型和思考模式、最大迭代次数以及用户选择的全局 `AGENTS.md` 挂载开关。因此修改这些运行时配置不需要
 重写上游编排。切换工作流或升级固定上游版本时，执行 `build` 重新生成入口。
 
 ## Default Workflow
@@ -244,19 +266,22 @@ Codex 兼容逻辑，不覆盖目标仓库中的 `.sandcastle/Dockerfile`。
 项目根目录的包管理器文件隔离。这样既能让 `main.ts/main.mts` 使用上游依赖，也不会把依赖安装到
 用户项目中。
 
-## Issue Selection
+## Ticket Handoff
 
-所有内置工作流使用同一查询：
+所有内置工作流都把 `ready-for-agent` 作为 ticket 交接标签，使用同一查询：
 
 ```bash
 gh issue list --state open --label ready-for-agent
 ```
 
-`init` 在标签不存在时只提示；`run` 会拒绝启动。查询不会退化为处理全部 open Issues。
+`init` 在标签不存在时只提示；`run` 会拒绝启动。查询不会退化为处理全部 open tickets，
+也不会绕过 `to-tickets` 的阻塞关系自行生成工作项。
 
 ## Limitations
 
 - 只支持 Codex + Docker + GitHub Issues。
+- 本项目从 `to-tickets` 之后开始，不负责需求澄清、Spec 编写、ticket 拆分或阻塞关系维护。
+- `ready-for-agent` 是交接标签，不是 ticket 创建入口。
 - 初始化和构建不会修改目标项目根目录的 `package.json`、依赖或 lock 文件。Harness 依赖
   安装在 `.sandcastle/` 内，项目依赖仍由项目自身的包管理器管理。
 - 只复用文件形式的 `~/.codex/auth.json`，不读取系统 keyring 凭据。
